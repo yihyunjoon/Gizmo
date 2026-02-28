@@ -17,9 +17,13 @@ struct GizmoApp: App {
         .frame(minWidth: 900, minHeight: 550)
         .onKeyPress { _ in .handled }
         .background {
-          MainWindowOpenActionRegistrar(
-            launcherPanelService: bootstrap.launcherPanelService
-          )
+          ZStack {
+            MainWindowOpenActionRegistrar(
+              launcherPanelService: bootstrap.launcherPanelService
+            )
+            MainWindowIdentityRegistrar()
+              .frame(width: 0, height: 0)
+          }
         }
         .environment(bootstrap.configStore)
         .environment(appEnvironment.permissionService)
@@ -65,10 +69,92 @@ private struct MainWindowOpenActionRegistrar: View {
     Color.clear
       .frame(width: 0, height: 0)
       .onAppear {
-        launcherPanelService.onOpenMainWindowRequest = { [openWindow] in
+        launcherPanelService.onOpenMainWindowRequest = { [openWindow] targetCenter in
           openWindow(id: "main")
-          NSApplication.shared.activate(ignoringOtherApps: true)
+          DispatchQueue.main.async {
+            bringMainWindowToFront(centeredAt: targetCenter, remainingAttempts: 4)
+          }
         }
       }
+  }
+
+  private func bringMainWindowToFront(
+    centeredAt targetCenter: CGPoint?,
+    remainingAttempts: Int
+  ) {
+    guard let window = resolveMainWindow() else {
+      guard remainingAttempts > 0 else { return }
+
+      DispatchQueue.main.async {
+        bringMainWindowToFront(
+          centeredAt: targetCenter,
+          remainingAttempts: remainingAttempts - 1
+        )
+      }
+      return
+    }
+
+    centerWindow(window, at: targetCenter)
+
+    if window.isMiniaturized {
+      window.deminiaturize(nil)
+    }
+
+    NSApplication.shared.activate(ignoringOtherApps: true)
+    window.makeKeyAndOrderFront(nil)
+  }
+
+  private func resolveMainWindow() -> NSWindow? {
+    if let taggedCandidate = NSApplication.shared.orderedWindows.first(where: isTaggedMainWindow(_:)) {
+      return taggedCandidate
+    }
+
+    if let taggedCandidate = NSApplication.shared.windows.first(where: isTaggedMainWindow(_:)) {
+      return taggedCandidate
+    }
+
+    if let orderedCandidate = NSApplication.shared.orderedWindows.first(where: isFallbackMainWindow(_:)) {
+      return orderedCandidate
+    }
+
+    return NSApplication.shared.windows.first(where: isFallbackMainWindow(_:))
+  }
+
+  private func isTaggedMainWindow(_ window: NSWindow) -> Bool {
+    window.identifier == MainWindowIdentity.identifier
+  }
+
+  private func isFallbackMainWindow(_ window: NSWindow) -> Bool {
+    if window is NSPanel { return false }
+    if !window.canBecomeMain { return false }
+
+    return true
+  }
+
+  private func centerWindow(_ window: NSWindow, at targetCenter: CGPoint?) {
+    guard let targetCenter else { return }
+
+    var frame = window.frame
+    frame.origin.x = floor(targetCenter.x - (frame.width / 2))
+    frame.origin.y = floor(targetCenter.y - (frame.height / 2))
+    window.setFrameOrigin(frame.origin)
+  }
+}
+
+private struct MainWindowIdentityRegistrar: NSViewRepresentable {
+  func makeNSView(context: Context) -> NSView {
+    let view = NSView(frame: .zero)
+
+    DispatchQueue.main.async {
+      view.window?.identifier = MainWindowIdentity.identifier
+    }
+
+    return view
+  }
+
+  func updateNSView(_ nsView: NSView, context: Context) {
+    DispatchQueue.main.async {
+      nsView.window?.identifier = MainWindowIdentity.identifier
+    }
   }
 }

@@ -14,7 +14,7 @@ final class LauncherPanelService: NSObject, NSWindowDelegate {
   private let accessibilityPermissionService: AccessibilityPermissionService
   private let configStore: ConfigStore
 
-  var onOpenMainWindowRequest: (() -> Void)?
+  var onOpenMainWindowRequest: ((_ targetCenter: CGPoint?) -> Void)?
 
   private var panel: LauncherPanel?
   private var previousInputSourceID: String?
@@ -171,12 +171,15 @@ final class LauncherPanelService: NSObject, NSWindowDelegate {
   }
 
   private func openMainWindowFromLauncher() {
+    let targetCenter = launcherDisplayCenter()
     hidePanel()
 
     guard let candidate = existingMainWindow() else {
-      onOpenMainWindowRequest?()
+      onOpenMainWindowRequest?(targetCenter)
       return
     }
+
+    centerWindow(candidate, at: targetCenter)
 
     if candidate.isMiniaturized {
       candidate.deminiaturize(nil)
@@ -186,7 +189,30 @@ final class LauncherPanelService: NSObject, NSWindowDelegate {
     candidate.makeKeyAndOrderFront(nil)
   }
 
+  private func launcherDisplayCenter() -> CGPoint? {
+    if let panel, let screen = panel.screen {
+      return screen.frame.center
+    }
+
+    if
+      let panelCenter = panel?.frame.center,
+      let containingScreen = NSScreen.screens.first(where: { $0.frame.contains(panelCenter) })
+    {
+      return containingScreen.frame.center
+    }
+
+    return NSScreen.main?.frame.center ?? NSScreen.screens.first?.frame.center
+  }
+
   private func existingMainWindow() -> NSWindow? {
+    if let taggedCandidate = NSApplication.shared.orderedWindows.first(where: isTaggedMainWindow(_:)) {
+      return taggedCandidate
+    }
+
+    if let taggedCandidate = NSApplication.shared.windows.first(where: isTaggedMainWindow(_:)) {
+      return taggedCandidate
+    }
+
     if let orderedCandidate = NSApplication.shared.orderedWindows.first(where: isMainWindowCandidate(_:)) {
       return orderedCandidate
     }
@@ -194,11 +220,25 @@ final class LauncherPanelService: NSObject, NSWindowDelegate {
     return NSApplication.shared.windows.first(where: isMainWindowCandidate(_:))
   }
 
+  private func isTaggedMainWindow(_ window: NSWindow) -> Bool {
+    window.identifier == MainWindowIdentity.identifier
+  }
+
   private func isMainWindowCandidate(_ window: NSWindow) -> Bool {
     if window === panel { return false }
     if window is NSPanel { return false }
+    if !window.canBecomeMain { return false }
 
-    return window.isVisible || window.isMiniaturized
+    return true
+  }
+
+  private func centerWindow(_ window: NSWindow, at targetCenter: CGPoint?) {
+    guard let targetCenter else { return }
+
+    var frame = window.frame
+    frame.origin.x = floor(targetCenter.x - (frame.width / 2))
+    frame.origin.y = floor(targetCenter.y - (frame.height / 2))
+    window.setFrameOrigin(frame.origin)
   }
 }
 
@@ -222,5 +262,11 @@ extension LauncherDisplay {
     case .activeWindow:
       return NSScreen.main
     }
+  }
+}
+
+private extension CGRect {
+  var center: CGPoint {
+    CGPoint(x: midX, y: midY)
   }
 }
