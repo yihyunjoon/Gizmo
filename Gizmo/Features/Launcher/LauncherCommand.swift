@@ -19,5 +19,11 @@ struct LauncherCommand: Identifiable, Equatable {
       keywords: ["tile", "right", "half", "window"],
       action: .rightHalf
     ),
+    LauncherCommand(
+      id: WindowTileAction.placeCenter.commandID,
+      title: WindowTileAction.placeCenter.commandTitle,
+      keywords: ["place", "center", "window", "resize", "middle"],
+      action: .placeCenter
+    ),
   ]
 }

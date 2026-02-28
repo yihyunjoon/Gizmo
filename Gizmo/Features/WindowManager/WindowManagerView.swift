@@ -43,6 +43,10 @@ struct WindowManagerView: View {
           execute(.rightHalf)
         }
 
+        Button(String(localized: "Place center")) {
+          execute(.placeCenter)
+        }
+
         if let lastError {
           Text(lastError.localizedDescription)
             .foregroundStyle(.red)

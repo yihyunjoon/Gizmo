@@ -4,6 +4,7 @@ import Observation
 enum WindowTileAction: String, CaseIterable {
   case leftHalf
   case rightHalf
+  case placeCenter
 
   var commandID: String {
     switch self {
@@ -11,15 +12,19 @@ enum WindowTileAction: String, CaseIterable {
       return "tile-left-half"
     case .rightHalf:
       return "tile-right-half"
+    case .placeCenter:
+      return "place-center"
     }
   }
 
   var commandTitle: String {
     switch self {
     case .leftHalf:
-      return "Tile left half"
+      return String(localized: "Tile left half")
     case .rightHalf:
-      return "Tile right half"
+      return String(localized: "Tile right half")
+    case .placeCenter:
+      return String(localized: "Place center")
     }
   }
 }
@@ -89,7 +94,7 @@ final class WindowManagerService {
     }
 
     let targetVisibleFrame = targetScreen.visibleFrame
-    let targetFrame = tiledFrame(for: action, in: targetVisibleFrame)
+    let targetFrame = targetFrame(for: action, in: targetVisibleFrame)
     let targetAXFrame = targetFrame.screenFlipped
 
     guard windowElement.setFrame(targetAXFrame) else {
@@ -101,22 +106,37 @@ final class WindowManagerService {
 
   // MARK: - Private
 
-  private func tiledFrame(
+  private func targetFrame(
     for action: WindowTileAction,
     in visibleFrame: CGRect
   ) -> CGRect {
-    let halfWidth = floor(visibleFrame.width / 2.0)
-    var frame = visibleFrame
-    frame.size.width = halfWidth
-
     switch action {
     case .leftHalf:
-      frame.origin.x = visibleFrame.minX
+      let halfWidth = floor(visibleFrame.width / 2.0)
+      return CGRect(
+        x: visibleFrame.minX,
+        y: visibleFrame.minY,
+        width: halfWidth,
+        height: visibleFrame.height
+      )
     case .rightHalf:
-      frame.origin.x = visibleFrame.maxX - halfWidth
+      let halfWidth = floor(visibleFrame.width / 2.0)
+      return CGRect(
+        x: visibleFrame.maxX - halfWidth,
+        y: visibleFrame.minY,
+        width: halfWidth,
+        height: visibleFrame.height
+      )
+    case .placeCenter:
+      let targetWidth = max(1, floor(visibleFrame.width * 0.6))
+      let targetHeight = max(1, floor(visibleFrame.height * 0.8))
+      return CGRect(
+        x: floor(visibleFrame.midX - (targetWidth / 2)),
+        y: floor(visibleFrame.midY - (targetHeight / 2)),
+        width: targetWidth,
+        height: targetHeight
+      )
     }
-
-    return frame
   }
 
   private func screenContaining(windowFrame: CGRect) -> NSScreen? {

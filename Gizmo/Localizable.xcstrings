@@ -527,6 +527,22 @@
         }
       }
     },
+    "Place center" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Place center"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "창 중앙(너비 60%, 높이 80%)으로 배치"
+          }
+        }
+      }
+    },
     "View" : {
 
     },
