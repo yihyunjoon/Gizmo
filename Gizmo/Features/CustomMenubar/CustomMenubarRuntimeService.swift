@@ -13,42 +13,13 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
   private var activeSpaceObserver: NSObjectProtocol?
 
   private let model = CustomMenubarModel()
+  private var onWorkspaceSelection: ((String) -> Void)?
 
   private(set) var isRunning = false
   private(set) var config: CustomMenubarConfig = .default
 
-  var onOpenMainWindow: ((CGPoint?) -> Void)?
-  var onReloadConfig: (() -> Void)?
-  var onTogglePanel: (() -> Void)?
-  var onQuit: (() -> Void)?
-
   override init() {
     super.init()
-
-    onOpenMainWindow = { [weak self] targetCenter in
-      self?.focusExistingMainWindow(at: targetCenter)
-    }
-    onReloadConfig = {}
-    onTogglePanel = {}
-    onQuit = {
-      NSApplication.shared.terminate(nil)
-    }
-  }
-
-  func setOpenMainWindowHandler(_ handler: @escaping (CGPoint?) -> Void) {
-    onOpenMainWindow = handler
-  }
-
-  func setReloadConfigHandler(_ handler: @escaping () -> Void) {
-    onReloadConfig = handler
-  }
-
-  func setTogglePanelHandler(_ handler: @escaping () -> Void) {
-    onTogglePanel = handler
-  }
-
-  func setQuitHandler(_ handler: @escaping () -> Void) {
-    onQuit = handler
   }
 
   func start() {
@@ -81,6 +52,23 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
   func reconfigureForDisplayChanges() {
     guard isRunning else { return }
     reconcileWindows()
+  }
+
+  func setWorkspaceSelectionHandler(_ handler: @escaping (String) -> Void) {
+    onWorkspaceSelection = handler
+
+    guard isRunning else { return }
+    reconcileWindows()
+  }
+
+  func updateWorkspaceState(
+    names: [String],
+    focusedWorkspaceName: String
+  ) {
+    model.updateWorkspaceState(
+      names: names,
+      focusedWorkspaceName: focusedWorkspaceName
+    )
   }
 
   private func observeScreenChangesIfNeeded() {
@@ -146,13 +134,16 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
       skylightAttachedScreenIDs.remove(id)
     }
 
-    let items = menuItems()
-
     for screen in targetScreens {
       let id = screenIdentifier(screen)
 
       if let controller = windows[id] {
-        controller.update(screen: screen, model: model, items: items, config: config)
+        controller.update(
+          screen: screen,
+          model: model,
+          config: config,
+          onWorkspaceTap: workspaceTapHandler()
+        )
         if hasSkyLight, !skylightAttachedScreenIDs.contains(id), let window = controller.window {
           attachWindowToSkyLight(window, screenID: id, attemptsRemaining: 8)
         }
@@ -167,8 +158,8 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
       let controller = CustomMenubarWindowController(
         screen: screen,
         model: model,
-        items: items,
-        config: config
+        config: config,
+        onWorkspaceTap: workspaceTapHandler()
       )
 
       windows[id] = controller
@@ -292,44 +283,6 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
     return NSScreen.screens.first(where: { NSMouseInRect(mouseLocation, $0.frame, false) })
   }
 
-  private func menuItems() -> [CustomMenubarItem] {
-    let openAction = onOpenMainWindow ?? { [weak self] targetCenter in
-      self?.focusExistingMainWindow(at: targetCenter)
-    }
-    let reloadAction = onReloadConfig ?? {}
-    let toggleAction = onTogglePanel ?? {}
-    let quitAction = onQuit ?? { NSApplication.shared.terminate(nil) }
-
-    return [
-      CustomMenubarItem(
-        id: "open-gizmo",
-        title: String(localized: "Open Gizmo"),
-        systemImage: "rectangle.stack",
-        action: { [weak self] in
-          openAction(self?.screenUnderMousePointer()?.frame.center)
-        }
-      ),
-      CustomMenubarItem(
-        id: "toggle-launcher",
-        title: String(localized: "Toggle Launcher"),
-        systemImage: "command.square",
-        action: { toggleAction() }
-      ),
-      CustomMenubarItem(
-        id: "reload-config",
-        title: String(localized: "Reload Config"),
-        systemImage: "arrow.clockwise",
-        action: { reloadAction() }
-      ),
-      CustomMenubarItem(
-        id: "quit",
-        title: String(localized: "Quit"),
-        systemImage: "power",
-        action: { quitAction() }
-      ),
-    ]
-  }
-
   private func screenIdentifier(_ screen: NSScreen) -> String {
     if let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber {
       return number.stringValue
@@ -338,58 +291,9 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
     return UUID().uuidString
   }
 
-  private func focusExistingMainWindow(at targetCenter: CGPoint?) {
-    guard let window = resolveMainWindow() else { return }
-
-    centerWindow(window, at: targetCenter)
-
-    if window.isMiniaturized {
-      window.deminiaturize(nil)
+  private func workspaceTapHandler() -> (String) -> Void {
+    { [weak self] workspaceName in
+      self?.onWorkspaceSelection?(workspaceName)
     }
-
-    NSApplication.shared.activate(ignoringOtherApps: true)
-    window.makeKeyAndOrderFront(nil)
-  }
-
-  private func resolveMainWindow() -> NSWindow? {
-    if let taggedCandidate = NSApplication.shared.orderedWindows.first(where: isTaggedMainWindow(_:)) {
-      return taggedCandidate
-    }
-
-    if let taggedCandidate = NSApplication.shared.windows.first(where: isTaggedMainWindow(_:)) {
-      return taggedCandidate
-    }
-
-    if let orderedCandidate = NSApplication.shared.orderedWindows.first(where: isFallbackMainWindow(_:)) {
-      return orderedCandidate
-    }
-
-    return NSApplication.shared.windows.first(where: isFallbackMainWindow(_:))
-  }
-
-  private func isTaggedMainWindow(_ window: NSWindow) -> Bool {
-    window.identifier == MainWindowIdentity.identifier
-  }
-
-  private func isFallbackMainWindow(_ window: NSWindow) -> Bool {
-    if window is NSPanel { return false }
-    if !window.canBecomeMain { return false }
-
-    return true
-  }
-
-  private func centerWindow(_ window: NSWindow, at targetCenter: CGPoint?) {
-    guard let targetCenter else { return }
-
-    var frame = window.frame
-    frame.origin.x = floor(targetCenter.x - (frame.width / 2))
-    frame.origin.y = floor(targetCenter.y - (frame.height / 2))
-    window.setFrameOrigin(frame.origin)
-  }
-}
-
-private extension CGRect {
-  var center: CGPoint {
-    CGPoint(x: midX, y: midY)
   }
 }

@@ -78,6 +78,11 @@ struct ConfigPathResolver {
     horizontal_padding = 8
     clock_24h = true
 
+    [workspace]
+    enabled = true
+    names = ["1", "2", "3", "4", "5"]
+    hide_strategy = "corner_offscreen"
+
     [gaps]
     inner.horizontal = 0
     inner.vertical = 0

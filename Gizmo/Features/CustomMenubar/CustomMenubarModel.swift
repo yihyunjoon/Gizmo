@@ -26,18 +26,15 @@ enum CustomMenubarRuntimeError: Error, LocalizedError {
   }
 }
 
-struct CustomMenubarItem: Identifiable {
-  let id: String
-  let title: String
-  let systemImage: String
-  let action: () -> Void
-}
-
 @MainActor
 @Observable
 final class CustomMenubarModel {
+  static let defaultWorkspaceNames: [String] = WorkspaceConfig.defaultNames
+
   private(set) var clockText = ""
   private(set) var frontAppName = ""
+  private(set) var workspaceNames: [String] = defaultWorkspaceNames
+  private(set) var focusedWorkspaceName: String = defaultWorkspaceNames.first ?? "1"
   private(set) var config: CustomMenubarConfig = .default
 
   private var clockTimer: Timer?
@@ -67,6 +64,25 @@ final class CustomMenubarModel {
 
   func hasWidget(_ widget: CustomMenubarWidget) -> Bool {
     config.widgets.contains(widget)
+  }
+
+  func isFocusedWorkspace(_ workspaceName: String) -> Bool {
+    focusedWorkspaceName == workspaceName
+  }
+
+  func focusWorkspace(_ workspaceName: String) {
+    guard workspaceNames.contains(workspaceName) else { return }
+    focusedWorkspaceName = workspaceName
+  }
+
+  func updateWorkspaceState(
+    names: [String],
+    focusedWorkspaceName: String
+  ) {
+    workspaceNames = names.isEmpty ? Self.defaultWorkspaceNames : names
+    self.focusedWorkspaceName = workspaceNames.contains(focusedWorkspaceName)
+      ? focusedWorkspaceName
+      : (workspaceNames.first ?? Self.defaultWorkspaceNames[0])
   }
 
   private func observeFrontApplicationIfNeeded() {

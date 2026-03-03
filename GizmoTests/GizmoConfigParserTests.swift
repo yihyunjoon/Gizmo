@@ -199,4 +199,109 @@ final class GizmoConfigParserTests: XCTestCase {
     let config = try? XCTUnwrap(result.config)
     XCTAssertEqual(config?.gaps, .default)
   }
+
+  func testParseWorkspaceWithValidValues() throws {
+    let result = parser.parse(
+      """
+      config-version = 1
+
+      [workspace]
+      enabled = true
+      names = ["Dev", "Web", "Chat"]
+      hide_strategy = "corner_offscreen"
+      """
+    )
+
+    XCTAssertNotNil(result.config)
+    XCTAssertTrue(result.errors.isEmpty)
+
+    let config = try XCTUnwrap(result.config)
+    XCTAssertTrue(config.workspace.enabled)
+    XCTAssertEqual(config.workspace.names, ["Dev", "Web", "Chat"])
+    XCTAssertEqual(config.workspace.hideStrategy, .cornerOffscreen)
+  }
+
+  func testWorkspaceNamesDuplicateReturnsError() {
+    let result = parser.parse(
+      """
+      config-version = 1
+
+      [workspace]
+      names = ["1", "1"]
+      """
+    )
+
+    XCTAssertNil(result.config)
+    XCTAssertTrue(result.errors.contains { $0.contains("workspace.names[1]") })
+  }
+
+  func testWorkspaceNamesEmptyStringReturnsError() {
+    let result = parser.parse(
+      """
+      config-version = 1
+
+      [workspace]
+      names = ["1", "  "]
+      """
+    )
+
+    XCTAssertNil(result.config)
+    XCTAssertTrue(result.errors.contains { $0.contains("workspace.names[1]") })
+  }
+
+  func testWorkspaceNamesTypeReturnsError() {
+    let result = parser.parse(
+      """
+      config-version = 1
+
+      [workspace]
+      names = ["1", 2]
+      """
+    )
+
+    XCTAssertNil(result.config)
+    XCTAssertTrue(result.errors.contains { $0.contains("workspace.names[1]") })
+  }
+
+  func testWorkspaceHideStrategyReturnsErrorOnInvalidValue() {
+    let result = parser.parse(
+      """
+      config-version = 1
+
+      [workspace]
+      hide_strategy = "minimize"
+      """
+    )
+
+    XCTAssertNil(result.config)
+    XCTAssertTrue(result.errors.contains { $0.contains("workspace.hide_strategy") })
+  }
+
+  func testUnknownWorkspaceKeyReturnsError() {
+    let result = parser.parse(
+      """
+      config-version = 1
+
+      [workspace]
+      mystery = true
+      """
+    )
+
+    XCTAssertNil(result.config)
+    XCTAssertTrue(result.errors.contains { $0.contains("workspace.mystery") })
+  }
+
+  func testWorkspaceDefaultsWhenSectionMissing() {
+    let result = parser.parse(
+      """
+      config-version = 1
+      """
+    )
+
+    XCTAssertNotNil(result.config)
+    XCTAssertTrue(result.errors.isEmpty)
+
+    let config = try? XCTUnwrap(result.config)
+    XCTAssertEqual(config?.workspace, .default)
+  }
 }

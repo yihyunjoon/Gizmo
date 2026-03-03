@@ -21,6 +21,7 @@ struct GizmoConfigParser {
       "config-version",
       "launcher",
       "custom_menubar",
+      "workspace",
       "gaps",
       "keystats",
     ]
@@ -57,11 +58,92 @@ struct GizmoConfigParser {
       parseGaps(gapsValue, config: &config, errors: &errors)
     }
 
+    if let workspaceValue = rawTable["workspace"] {
+      parseWorkspace(workspaceValue, config: &config, errors: &errors)
+    }
+
     if let keystatsValue = rawTable["keystats"] {
       parseKeystats(keystatsValue, config: &config, errors: &errors)
     }
 
     return errors.isEmpty ? (config, []) : (nil, errors)
+  }
+
+  private func parseWorkspace(
+    _ raw: TOMLValueConvertible,
+    config: inout GizmoConfig,
+    errors: inout [String]
+  ) {
+    guard let workspaceTable = raw.table else {
+      errors.append("workspace: Expected table, got \(raw.type)")
+      return
+    }
+
+    appendUnknownKeys(
+      in: workspaceTable,
+      allowed: ["enabled", "names", "hide_strategy"],
+      prefix: "workspace",
+      errors: &errors
+    )
+
+    if let enabledRaw = workspaceTable["enabled"] {
+      guard let enabled = enabledRaw.bool else {
+        errors.append("workspace.enabled: Expected bool, got \(enabledRaw.type)")
+        return
+      }
+      config.workspace.enabled = enabled
+    }
+
+    if let namesRaw = workspaceTable["names"] {
+      guard let namesArray = namesRaw.array else {
+        errors.append("workspace.names: Expected array, got \(namesRaw.type)")
+        return
+      }
+
+      var parsedNames: [String] = []
+      var uniqueNames: Set<String> = []
+      for (index, value) in namesArray.enumerated() {
+        guard let rawName = value.string else {
+          errors.append("workspace.names[\(index)]: Expected string, got \(value.type)")
+          continue
+        }
+
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else {
+          errors.append("workspace.names[\(index)]: Empty workspace name is not allowed.")
+          continue
+        }
+
+        guard uniqueNames.insert(name).inserted else {
+          errors.append("workspace.names[\(index)]: Duplicate workspace name '\(name)'.")
+          continue
+        }
+
+        parsedNames.append(name)
+      }
+
+      if parsedNames.isEmpty {
+        errors.append("workspace.names: At least one workspace name is required.")
+      } else {
+        config.workspace.names = parsedNames
+      }
+    }
+
+    if let hideStrategyRaw = workspaceTable["hide_strategy"] {
+      guard let hideStrategyValue = hideStrategyRaw.string else {
+        errors.append("workspace.hide_strategy: Expected string, got \(hideStrategyRaw.type)")
+        return
+      }
+
+      guard let hideStrategy = WorkspaceHideStrategy(rawValue: hideStrategyValue) else {
+        errors.append(
+          "workspace.hide_strategy: Invalid value '\(hideStrategyValue)'. Allowed: corner_offscreen."
+        )
+        return
+      }
+
+      config.workspace.hideStrategy = hideStrategy
+    }
   }
 
   private func parseLauncher(

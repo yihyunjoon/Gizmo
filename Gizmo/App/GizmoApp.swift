@@ -24,8 +24,7 @@ struct GizmoApp: App {
         .background {
           ZStack {
             MainWindowOpenActionRegistrar(
-              launcherPanelService: bootstrap.launcherPanelService,
-              customMenubarRuntimeService: bootstrap.customMenubarRuntimeService
+              launcherPanelService: bootstrap.launcherPanelService
             )
             MainWindowIdentityRegistrar()
               .frame(width: 0, height: 0)
@@ -36,6 +35,7 @@ struct GizmoApp: App {
         .environment(appEnvironment.monitorService)
         .environment(bootstrap.accessibilityPermissionService)
         .environment(bootstrap.windowManagerService)
+        .environment(bootstrap.virtualWorkspaceService)
         .onAppear {
           appEnvironment.configureMonitoring(
             container: bootstrap.sharedModelContainer,
@@ -53,6 +53,7 @@ struct GizmoApp: App {
           )
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+          bootstrap.virtualWorkspaceService.restoreAllWindows()
           bootstrap.customMenubarRuntimeService.stop()
         }
     }
@@ -77,8 +78,6 @@ private struct MainWindowOpenActionRegistrar: View {
   @Environment(\.openWindow) private var openWindow
 
   let launcherPanelService: LauncherPanelService
-  let customMenubarRuntimeService: CustomMenubarRuntimeService
-  @Environment(ConfigStore.self) private var configStore
 
   var body: some View {
     Color.clear
@@ -92,13 +91,6 @@ private struct MainWindowOpenActionRegistrar: View {
         }
 
         launcherPanelService.onOpenMainWindowRequest = focusMainWindow
-        customMenubarRuntimeService.setOpenMainWindowHandler(focusMainWindow)
-        customMenubarRuntimeService.setReloadConfigHandler {
-          _ = configStore.reload()
-        }
-        customMenubarRuntimeService.setTogglePanelHandler {
-          launcherPanelService.togglePanel()
-        }
       }
   }
 

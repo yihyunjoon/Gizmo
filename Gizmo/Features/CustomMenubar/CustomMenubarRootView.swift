@@ -2,7 +2,7 @@ import SwiftUI
 
 struct CustomMenubarRootView: View {
   @Bindable var model: CustomMenubarModel
-  let items: [CustomMenubarItem]
+  let onWorkspaceTap: (String) -> Void
 
   var body: some View {
     ZStack {
@@ -10,16 +10,29 @@ struct CustomMenubarRootView: View {
 
       HStack(spacing: 10) {
         HStack(spacing: 6) {
-          ForEach(items) { item in
+          ForEach(model.workspaceNames, id: \.self) { workspaceName in
             Button {
-              item.action()
+              onWorkspaceTap(workspaceName)
             } label: {
-              Label(item.title, systemImage: item.systemImage)
-                .labelStyle(.titleAndIcon)
+              Text(workspaceName)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(
+                  model.isFocusedWorkspace(workspaceName)
+                    ? Color.white.opacity(0.96)
+                    : Color.white.opacity(0.74)
+                )
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(
+                  Capsule(style: .continuous)
+                    .fill(
+                      model.isFocusedWorkspace(workspaceName)
+                        ? Color.white.opacity(0.24)
+                        : Color.white.opacity(0.12)
+                    )
+                )
             }
-            .buttonStyle(.bordered)
-            .controlSize(.mini)
-            .tint(Color.white.opacity(0.18))
+            .buttonStyle(.plain)
           }
         }
 

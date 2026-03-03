@@ -1,6 +1,16 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%@ (%lld)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ (%2$lld)"
+          }
+        }
+      }
+    },
     "%lld" : {
 
     },
@@ -20,6 +30,9 @@
         }
       }
     },
+    "Accessibility permission is required for accurate window tracking." : {
+
+    },
     "Accessibility permission is required." : {
       "localizations" : {
         "en" : {
@@ -38,6 +51,9 @@
     },
     "Active Display" : {
       "comment" : "Launcher window placement option for the currently active display."
+    },
+    "Active Workspace" : {
+
     },
     "All Displays" : {
 
@@ -237,7 +253,22 @@
     "Height" : {
 
     },
+    "Hidden" : {
+
+    },
+    "Hidden Managed Windows" : {
+
+    },
+    "Hide Strategy" : {
+
+    },
     "Horizontal Padding" : {
+
+    },
+    "How Gizmo Workspace Works" : {
+
+    },
+    "id: %@" : {
 
     },
     "Inner Horizontal" : {
@@ -281,6 +312,9 @@
     "Input Source" : {
 
     },
+    "Invalid workspace." : {
+
+    },
     "Key" : {
       "localizations" : {
         "en" : {
@@ -306,6 +340,15 @@
     "Launcher Hot Key" : {
 
     },
+    "Managed Window Count" : {
+
+    },
+    "Managed Windows" : {
+
+    },
+    "Managed windows in inactive workspaces are hidden by moving them off-screen." : {
+
+    },
     "Monitoring" : {
       "localizations" : {
         "en" : {
@@ -321,6 +364,9 @@
           }
         }
       }
+    },
+    "Move Focused Window to Workspace %@" : {
+
     },
     "No Data Yet" : {
 
@@ -340,6 +386,12 @@
           }
         }
       }
+    },
+    "No managed windows in this workspace." : {
+
+    },
+    "No managed windows yet." : {
+
     },
     "No matching commands." : {
       "localizations" : {
@@ -372,6 +424,15 @@
           }
         }
       }
+    },
+    "offscreen" : {
+
+    },
+    "Only windows moved via workspace commands become managed windows." : {
+
+    },
+    "onscreen" : {
+
     },
     "Open Config" : {
 
@@ -461,10 +522,16 @@
     "Position" : {
 
     },
+    "Previous Workspace" : {
+
+    },
     "Primary Display" : {
       "comment" : "Launcher window placement option for the primary display."
     },
     "Quit" : {
+
+    },
+    "Refresh Window Snapshot" : {
 
     },
     "Reload Config" : {
@@ -535,6 +602,9 @@
           }
         }
       }
+    },
+    "Switch to Workspace %@" : {
+
     },
     "Test Commands" : {
       "localizations" : {
@@ -609,19 +679,28 @@
     "Unknown App" : {
 
     },
+    "Unknown Window" : {
+
+    },
+    "Unmanaged windows stay visible across all workspaces." : {
+
+    },
     "View" : {
 
     },
+    "Visible" : {
+
+    },
     "When enabled, launcher input uses an English keyboard layout while the launcher is open." : {
+
+    },
+    "Widgets" : {
 
     },
     "Window Gaps" : {
 
     },
     "Window gaps are configured in config.toml under [gaps]." : {
-
-    },
-    "Widgets" : {
 
     },
     "Window Manager" : {
@@ -640,6 +719,24 @@
           }
         }
       }
+    },
+    "Workspace" : {
+      "comment" : "Title for the Workspace tab, shown in the sidebar."
+    },
+    "Workspace Back and Forth" : {
+
+    },
+    "Workspace Enabled" : {
+
+    },
+    "Workspace feature is disabled in config." : {
+
+    },
+    "Workspace Mapping" : {
+
+    },
+    "Workspace Status" : {
+
     }
   },
   "version" : "1.1"

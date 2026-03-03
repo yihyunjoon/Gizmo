@@ -11,25 +11,31 @@ final class LauncherPanelService: NSObject, NSWindowDelegate {
   // MARK: - Properties
 
   private let windowManagerService: WindowManagerService
+  private let virtualWorkspaceService: VirtualWorkspaceService
   private let accessibilityPermissionService: AccessibilityPermissionService
   private let configStore: ConfigStore
 
   var onOpenMainWindowRequest: ((_ targetCenter: CGPoint?) -> Void)?
 
   private var panel: LauncherPanel?
+  private var panelHostingController: NSHostingController<LauncherInputView>?
   private var previousInputSourceID: String?
   private var focusedWindowBeforePanelOpen: AXUIElement?
+  private var commands: [LauncherCommand]
 
   // MARK: - Initialization
 
   init(
     windowManagerService: WindowManagerService,
+    virtualWorkspaceService: VirtualWorkspaceService,
     accessibilityPermissionService: AccessibilityPermissionService,
     configStore: ConfigStore
   ) {
     self.windowManagerService = windowManagerService
+    self.virtualWorkspaceService = virtualWorkspaceService
     self.accessibilityPermissionService = accessibilityPermissionService
     self.configStore = configStore
+    self.commands = LauncherCommand.makeAll(workspaceNames: virtualWorkspaceService.state.workspaceNames)
     super.init()
   }
 
@@ -52,6 +58,8 @@ final class LauncherPanelService: NSObject, NSWindowDelegate {
   func showPanel() {
     if panel == nil {
       panel = createPanel()
+    } else {
+      refreshPanelContent()
     }
 
     guard let panel else { return }
@@ -66,6 +74,11 @@ final class LauncherPanelService: NSObject, NSWindowDelegate {
       name: .launcherPanelDidOpen,
       object: nil
     )
+  }
+
+  func updateWorkspaceCommands(workspaceNames: [String]) {
+    commands = LauncherCommand.makeAll(workspaceNames: workspaceNames)
+    refreshPanelContent()
   }
 
   // MARK: - Private
@@ -107,32 +120,8 @@ final class LauncherPanelService: NSObject, NSWindowDelegate {
   }
 
   private func createPanel() -> LauncherPanel {
-    let contentView = LauncherInputView(
-      onClose: { [weak self] in
-        self?.hidePanel()
-      },
-      onExecuteCommand: { [weak self] command in
-        guard let self else { return .failure(.applyFailed) }
-        let result = self.windowManagerService.execute(
-          command.action,
-          preferredWindowElement: self.focusedWindowBeforePanelOpen
-        )
-
-        if case .success = result {
-          self.focusedWindowBeforePanelOpen = nil
-        }
-
-        return result
-      },
-      onOpenAccessibilitySettings: { [weak self] in
-        self?.accessibilityPermissionService.openSystemSettings()
-      },
-      onOpenMainWindow: { [weak self] in
-        self?.openMainWindowFromLauncher()
-      }
-    )
-
-    let hostingController = NSHostingController(rootView: contentView)
+    let hostingController = makePanelHostingController()
+    panelHostingController = hostingController
 
     let panel = LauncherPanel(
       contentRect: NSRect(
@@ -162,6 +151,91 @@ final class LauncherPanelService: NSObject, NSWindowDelegate {
     panel.contentViewController = hostingController
 
     return panel
+  }
+
+  private func makePanelHostingController() -> NSHostingController<LauncherInputView> {
+    NSHostingController(rootView: makeLauncherInputView())
+  }
+
+  private func makeLauncherInputView() -> LauncherInputView {
+    LauncherInputView(
+      commands: commands,
+      onClose: { [weak self] in
+        self?.hidePanel()
+      },
+      onExecuteCommand: { [weak self] command in
+        guard let self else { return .failure(.windowManager(.applyFailed)) }
+        return self.execute(command)
+      },
+      onOpenAccessibilitySettings: { [weak self] in
+        self?.accessibilityPermissionService.openSystemSettings()
+      },
+      onOpenMainWindow: { [weak self] in
+        self?.openMainWindowFromLauncher()
+      }
+    )
+  }
+
+  private func refreshPanelContent() {
+    guard let panelHostingController else { return }
+    panelHostingController.rootView = makeLauncherInputView()
+  }
+
+  private func execute(_ command: LauncherCommand) -> Result<Void, LauncherCommandError> {
+    let result: Result<Void, LauncherCommandError>
+
+    switch command.action {
+    case .tile(let tileAction):
+      result = mapWindowManagerResult(
+        windowManagerService.execute(
+          tileAction,
+          preferredWindowElement: focusedWindowBeforePanelOpen
+        )
+      )
+    case .workspaceFocus(let workspaceName):
+      result = mapWorkspaceResult(
+        virtualWorkspaceService.focusWorkspace(workspaceName)
+      )
+    case .workspaceBackAndForth:
+      result = mapWorkspaceResult(
+        virtualWorkspaceService.focusPreviousWorkspace()
+      )
+    case .moveFocusedWindowToWorkspace(let workspaceName):
+      result = mapWorkspaceResult(
+        virtualWorkspaceService.moveFocusedWindowToWorkspace(
+          workspaceName,
+          preferredWindowElement: focusedWindowBeforePanelOpen
+        )
+      )
+    }
+
+    if case .success = result {
+      focusedWindowBeforePanelOpen = nil
+    }
+
+    return result
+  }
+
+  private func mapWindowManagerResult(
+    _ result: Result<Void, WindowManagerError>
+  ) -> Result<Void, LauncherCommandError> {
+    switch result {
+    case .success:
+      return .success(())
+    case .failure(let error):
+      return .failure(.windowManager(error))
+    }
+  }
+
+  private func mapWorkspaceResult(
+    _ result: Result<Void, WorkspaceError>
+  ) -> Result<Void, LauncherCommandError> {
+    switch result {
+    case .success:
+      return .success(())
+    case .failure(let error):
+      return .failure(.workspace(error))
+    }
   }
 
   // MARK: - NSWindowDelegate

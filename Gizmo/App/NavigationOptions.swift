@@ -4,12 +4,14 @@ enum NavigationItem: Equatable, Hashable, Identifiable {
   case heatmap
   case launcher
   case customMenubar
+  case workspace
   case windowManager
 
   static let mainPages: [NavigationItem] = [
     .heatmap,
     .launcher,
     .customMenubar,
+    .workspace,
     .windowManager
   ]
 
@@ -18,6 +20,7 @@ enum NavigationItem: Equatable, Hashable, Identifiable {
     case .heatmap: return "Heatmap"
     case .launcher: return "Launcher"
     case .customMenubar: return "Custom Menubar"
+    case .workspace: return "Workspace"
     case .windowManager: return "WindowManager"
     }
   }
@@ -39,6 +42,11 @@ enum NavigationItem: Equatable, Hashable, Identifiable {
         "Custom Menubar",
         comment: "Title for the Custom Menubar tab, shown in the sidebar."
       )
+    case .workspace:
+      LocalizedStringResource(
+        "Workspace",
+        comment: "Title for the Workspace tab, shown in the sidebar."
+      )
     case .windowManager:
       LocalizedStringResource(
         "Window Manager",
@@ -52,6 +60,7 @@ enum NavigationItem: Equatable, Hashable, Identifiable {
     case .heatmap: "keyboard"
     case .launcher: "command.square"
     case .customMenubar: "menubar.dock.rectangle"
+    case .workspace: "rectangle.3.group"
     case .windowManager: "rectangle.split.2x1"
     }
   }
@@ -61,6 +70,7 @@ enum NavigationItem: Equatable, Hashable, Identifiable {
     case .heatmap: HeatmapView()
     case .launcher: LauncherView()
     case .customMenubar: CustomMenubarSettingsView()
+    case .workspace: WorkspaceView()
     case .windowManager: WindowManagerView()
     }
   }

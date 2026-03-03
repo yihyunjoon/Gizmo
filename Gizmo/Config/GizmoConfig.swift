@@ -5,6 +5,7 @@ struct GizmoConfig: Equatable {
   var configVersion: Int
   var launcher: LauncherConfig
   var customMenubar: CustomMenubarConfig
+  var workspace: WorkspaceConfig
   var gaps: WindowManagerGapsConfig
   var keystats: KeystatsConfig
 
@@ -14,9 +15,28 @@ struct GizmoConfig: Equatable {
     configVersion: supportedConfigVersion,
     launcher: .default,
     customMenubar: .default,
+    workspace: .default,
     gaps: .default,
     keystats: .default
   )
+}
+
+struct WorkspaceConfig: Equatable {
+  var enabled: Bool
+  var names: [String]
+  var hideStrategy: WorkspaceHideStrategy
+
+  static let defaultNames: [String] = ["1", "2", "3", "4", "5"]
+
+  static let `default` = WorkspaceConfig(
+    enabled: true,
+    names: defaultNames,
+    hideStrategy: .cornerOffscreen
+  )
+}
+
+enum WorkspaceHideStrategy: String, CaseIterable, Equatable {
+  case cornerOffscreen = "corner_offscreen"
 }
 
 struct LauncherConfig: Equatable {

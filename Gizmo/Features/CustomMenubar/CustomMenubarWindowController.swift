@@ -9,12 +9,15 @@ final class CustomMenubarWindowController: NSWindowController {
   init(
     screen: NSScreen,
     model: CustomMenubarModel,
-    items: [CustomMenubarItem],
-    config: CustomMenubarConfig
+    config: CustomMenubarConfig,
+    onWorkspaceTap: @escaping (String) -> Void
   ) {
     self.screen = screen
     self.hostingController = NSHostingController(
-      rootView: CustomMenubarRootView(model: model, items: items)
+      rootView: CustomMenubarRootView(
+        model: model,
+        onWorkspaceTap: onWorkspaceTap
+      )
     )
     hostingController.sizingOptions = []
 
@@ -24,7 +27,12 @@ final class CustomMenubarWindowController: NSWindowController {
     window.isReleasedWhenClosed = false
     window.contentViewController = hostingController
 
-    update(screen: screen, model: model, items: items, config: config)
+    update(
+      screen: screen,
+      model: model,
+      config: config,
+      onWorkspaceTap: onWorkspaceTap
+    )
   }
 
   required init?(coder: NSCoder) {
@@ -34,8 +42,8 @@ final class CustomMenubarWindowController: NSWindowController {
   func update(
     screen: NSScreen,
     model: CustomMenubarModel,
-    items: [CustomMenubarItem],
-    config: CustomMenubarConfig
+    config: CustomMenubarConfig,
+    onWorkspaceTap: @escaping (String) -> Void
   ) {
     self.screen = screen
 
@@ -48,7 +56,10 @@ final class CustomMenubarWindowController: NSWindowController {
     )
 
     window.level = CustomMenubarWindow.renderLevel
-    hostingController.rootView = CustomMenubarRootView(model: model, items: items)
+    hostingController.rootView = CustomMenubarRootView(
+      model: model,
+      onWorkspaceTap: onWorkspaceTap
+    )
     window.setFrame(nextFrame, display: true)
   }
 

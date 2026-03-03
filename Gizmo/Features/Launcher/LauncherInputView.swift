@@ -11,8 +11,9 @@ struct LauncherInputView: View {
 
   // MARK: - Properties
 
+  let commands: [LauncherCommand]
   let onClose: () -> Void
-  let onExecuteCommand: (LauncherCommand) -> Result<Void, WindowManagerError>
+  let onExecuteCommand: (LauncherCommand) -> Result<Void, LauncherCommandError>
   let onOpenAccessibilitySettings: () -> Void
   let onOpenMainWindow: () -> Void
   let matcher: LauncherFuzzyMatcher = LauncherFuzzyMatcher()
@@ -20,11 +21,9 @@ struct LauncherInputView: View {
 
   @State private var query: String = ""
   @State private var selectedCommandIndex: Int = 0
-  @State private var executionError: WindowManagerError?
+  @State private var executionError: LauncherCommandError?
 
   @FocusState private var isInputFocused: Bool
-
-  private let commands = LauncherCommand.all
 
   private var rankedCommands: [LauncherMatchResult] {
     matcher.rank(
@@ -109,10 +108,12 @@ struct LauncherInputView: View {
             .font(.footnote)
             .foregroundStyle(.red)
 
-          Button(String(localized: "Open System Settings")) {
-            onOpenAccessibilitySettings()
+          if executionError.isAccessibilityPermissionError {
+            Button(String(localized: "Open System Settings")) {
+              onOpenAccessibilitySettings()
+            }
+            .buttonStyle(.bordered)
           }
-          .buttonStyle(.bordered)
         }
       }
     }
@@ -219,6 +220,7 @@ struct LauncherInputView: View {
 
 #Preview {
   LauncherInputView(
+    commands: LauncherCommand.makeAll(workspaceNames: WorkspaceConfig.defaultNames),
     onClose: {},
     onExecuteCommand: { _ in .success(()) },
     onOpenAccessibilitySettings: {},
