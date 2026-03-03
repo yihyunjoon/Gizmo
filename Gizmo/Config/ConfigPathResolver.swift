@@ -69,6 +69,7 @@ struct ConfigPathResolver {
 
     [custom_menubar]
     enabled = false
+    border = true
     display_scope = "all"
     position = "bottom"
     height = 30
@@ -76,6 +77,14 @@ struct ConfigPathResolver {
     background_opacity = 0.75
     horizontal_padding = 8
     clock_24h = true
+
+    [gaps]
+    inner.horizontal = 0
+    inner.vertical = 0
+    outer.left = 0
+    outer.top = 0
+    outer.right = 0
+    outer.bottom = 0
 
     [keystats]
     auto_start_monitoring = true

@@ -21,6 +21,7 @@ struct GizmoConfigParser {
       "config-version",
       "launcher",
       "custom_menubar",
+      "gaps",
       "keystats",
     ]
     appendUnknownKeys(
@@ -50,6 +51,10 @@ struct GizmoConfigParser {
 
     if let customMenubarValue = rawTable["custom_menubar"] {
       parseCustomMenubar(customMenubarValue, config: &config, errors: &errors)
+    }
+
+    if let gapsValue = rawTable["gaps"] {
+      parseGaps(gapsValue, config: &config, errors: &errors)
     }
 
     if let keystatsValue = rawTable["keystats"] {
@@ -188,6 +193,7 @@ struct GizmoConfigParser {
       in: menubarTable,
       allowed: [
         "enabled",
+        "border",
         "display_scope",
         "position",
         "height",
@@ -207,6 +213,15 @@ struct GizmoConfigParser {
       }
 
       config.customMenubar.enabled = enabled
+    }
+
+    if let borderRaw = menubarTable["border"] {
+      guard let border = borderRaw.bool else {
+        errors.append("custom_menubar.border: Expected bool, got \(borderRaw.type)")
+        return
+      }
+
+      config.customMenubar.border = border
     }
 
     if let displayScopeRaw = menubarTable["display_scope"] {
@@ -332,6 +347,148 @@ struct GizmoConfigParser {
     }
   }
 
+  private func parseGaps(
+    _ raw: TOMLValueConvertible,
+    config: inout GizmoConfig,
+    errors: inout [String]
+  ) {
+    guard let gapsTable = raw.table else {
+      errors.append("gaps: Expected table, got \(raw.type)")
+      return
+    }
+
+    appendUnknownKeys(
+      in: gapsTable,
+      allowed: ["inner", "outer"],
+      prefix: "gaps",
+      errors: &errors
+    )
+
+    if let innerRaw = gapsTable["inner"] {
+      parseInnerGaps(
+        innerRaw,
+        innerGaps: &config.gaps.inner,
+        errors: &errors
+      )
+    }
+
+    if let outerRaw = gapsTable["outer"] {
+      parseOuterGaps(
+        outerRaw,
+        outerGaps: &config.gaps.outer,
+        errors: &errors
+      )
+    }
+  }
+
+  private func parseInnerGaps(
+    _ raw: TOMLValueConvertible,
+    innerGaps: inout WindowManagerInnerGaps,
+    errors: inout [String]
+  ) {
+    guard let innerTable = raw.table else {
+      errors.append("gaps.inner: Expected table, got \(raw.type)")
+      return
+    }
+
+    appendUnknownKeys(
+      in: innerTable,
+      allowed: ["horizontal", "vertical"],
+      prefix: "gaps.inner",
+      errors: &errors
+    )
+
+    if let horizontalRaw = innerTable["horizontal"] {
+      guard let horizontal = nonNegativeNumberValue(
+        from: horizontalRaw,
+        path: "gaps.inner.horizontal",
+        errors: &errors
+      ) else {
+        return
+      }
+
+      innerGaps.horizontal = horizontal
+    }
+
+    if let verticalRaw = innerTable["vertical"] {
+      guard let vertical = nonNegativeNumberValue(
+        from: verticalRaw,
+        path: "gaps.inner.vertical",
+        errors: &errors
+      ) else {
+        return
+      }
+
+      innerGaps.vertical = vertical
+    }
+  }
+
+  private func parseOuterGaps(
+    _ raw: TOMLValueConvertible,
+    outerGaps: inout WindowManagerOuterGaps,
+    errors: inout [String]
+  ) {
+    guard let outerTable = raw.table else {
+      errors.append("gaps.outer: Expected table, got \(raw.type)")
+      return
+    }
+
+    appendUnknownKeys(
+      in: outerTable,
+      allowed: ["left", "top", "right", "bottom"],
+      prefix: "gaps.outer",
+      errors: &errors
+    )
+
+    if let leftRaw = outerTable["left"] {
+      guard let left = nonNegativeNumberValue(
+        from: leftRaw,
+        path: "gaps.outer.left",
+        errors: &errors
+      ) else {
+        return
+      }
+
+      outerGaps.left = left
+    }
+
+    if let topRaw = outerTable["top"] {
+      guard let top = nonNegativeNumberValue(
+        from: topRaw,
+        path: "gaps.outer.top",
+        errors: &errors
+      ) else {
+        return
+      }
+
+      outerGaps.top = top
+    }
+
+    if let rightRaw = outerTable["right"] {
+      guard let right = nonNegativeNumberValue(
+        from: rightRaw,
+        path: "gaps.outer.right",
+        errors: &errors
+      ) else {
+        return
+      }
+
+      outerGaps.right = right
+    }
+
+    if let bottomRaw = outerTable["bottom"] {
+      guard let bottom = nonNegativeNumberValue(
+        from: bottomRaw,
+        path: "gaps.outer.bottom",
+        errors: &errors
+      ) else {
+        return
+      }
+
+      outerGaps.bottom = bottom
+    }
+  }
+
   private func parseKeystats(
     _ raw: TOMLValueConvertible,
     config: inout GizmoConfig,
@@ -377,5 +534,23 @@ struct GizmoConfigParser {
     if let double = value.double { return double }
     if let int = value.int { return Double(int) }
     return nil
+  }
+
+  private func nonNegativeNumberValue(
+    from value: TOMLValueConvertible,
+    path: String,
+    errors: inout [String]
+  ) -> Double? {
+    guard let number = numberValue(from: value) else {
+      errors.append("\(path): Expected number, got \(value.type)")
+      return nil
+    }
+
+    guard number >= 0 else {
+      errors.append("\(path): Out of range. Allowed: >= 0.")
+      return nil
+    }
+
+    return number
   }
 }

@@ -46,13 +46,26 @@ struct CustomMenubarRootView: View {
     }
     .frame(height: CGFloat(model.config.height))
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .overlay(alignment: .bottom) {
-      Divider()
-        .overlay(Color.white.opacity(0.18))
+    .overlay(alignment: model.config.position.borderAlignment) {
+      if model.config.border {
+        Divider()
+          .overlay(Color.white.opacity(0.18))
+      }
     }
     .contentShape(Rectangle())
     .onTapGesture {
       // Intentionally capture background clicks to keep full-width interaction behavior.
+    }
+  }
+}
+
+private extension CustomMenubarPosition {
+  var borderAlignment: Alignment {
+    switch self {
+    case .top:
+      return .bottom
+    case .bottom:
+      return .top
     }
   }
 }

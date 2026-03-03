@@ -45,6 +45,9 @@
     "Background Opacity" : {
 
     },
+    "Border" : {
+
+    },
     "Bottom" : {
 
     },
@@ -237,6 +240,12 @@
     "Horizontal Padding" : {
 
     },
+    "Inner Horizontal" : {
+
+    },
+    "Inner Vertical" : {
+
+    },
     "Input Monitoring" : {
       "localizations" : {
         "en" : {
@@ -385,6 +394,18 @@
           }
         }
       }
+    },
+    "Outer Bottom" : {
+
+    },
+    "Outer Left" : {
+
+    },
+    "Outer Right" : {
+
+    },
+    "Outer Top" : {
+
     },
     "Path" : {
 
@@ -592,6 +613,12 @@
 
     },
     "When enabled, launcher input uses an English keyboard layout while the launcher is open." : {
+
+    },
+    "Window Gaps" : {
+
+    },
+    "Window gaps are configured in config.toml under [gaps]." : {
 
     },
     "Widgets" : {

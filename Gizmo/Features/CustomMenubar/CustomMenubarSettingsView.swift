@@ -14,6 +14,13 @@ struct CustomMenubarSettingsView: View {
         )
 
         LabeledContent(
+          String(localized: "Border"),
+          value: configStore.active.customMenubar.border
+            ? String(localized: "Enabled")
+            : String(localized: "Disabled")
+        )
+
+        LabeledContent(
           String(localized: "Display Scope"),
           value: configStore.active.customMenubar.displayScope.titleText
         )

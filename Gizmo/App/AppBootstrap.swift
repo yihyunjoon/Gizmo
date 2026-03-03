@@ -18,7 +18,9 @@ struct AppBootstrap {
     let hotKeyService = GlobalHotKeyService()
     let accessibilityPermissionService = AccessibilityPermissionService()
     let windowManagerService = WindowManagerService(
-      permissionService: accessibilityPermissionService
+      permissionService: accessibilityPermissionService,
+      customMenubarConfigProvider: { configStore.active.customMenubar },
+      gapsConfigProvider: { configStore.active.gaps }
     )
     let launcherPanelService = LauncherPanelService(
       windowManagerService: windowManagerService,

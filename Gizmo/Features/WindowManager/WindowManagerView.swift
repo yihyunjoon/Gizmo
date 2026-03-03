@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct WindowManagerView: View {
+  @Environment(ConfigStore.self) private var configStore
   @Environment(AccessibilityPermissionService.self)
   private var accessibilityPermissionService
   @Environment(WindowManagerService.self)
@@ -59,6 +60,44 @@ struct WindowManagerView: View {
       } header: {
         Text(String(localized: "Test Commands"))
       }
+
+      Section {
+        LabeledContent(
+          String(localized: "Inner Horizontal"),
+          value: String(format: "%.0f", configStore.active.gaps.inner.horizontal)
+        )
+        LabeledContent(
+          String(localized: "Inner Vertical"),
+          value: String(format: "%.0f", configStore.active.gaps.inner.vertical)
+        )
+        LabeledContent(
+          String(localized: "Outer Left"),
+          value: String(format: "%.0f", configStore.active.gaps.outer.left)
+        )
+        LabeledContent(
+          String(localized: "Outer Top"),
+          value: String(format: "%.0f", configStore.active.gaps.outer.top)
+        )
+        LabeledContent(
+          String(localized: "Outer Right"),
+          value: String(format: "%.0f", configStore.active.gaps.outer.right)
+        )
+        LabeledContent(
+          String(localized: "Outer Bottom"),
+          value: String(format: "%.0f", configStore.active.gaps.outer.bottom)
+        )
+
+        Text(
+          String(
+            localized:
+              "Window gaps are configured in config.toml under [gaps]."
+          )
+        )
+        .foregroundStyle(.secondary)
+        .font(.footnote)
+      } header: {
+        Text(String(localized: "Window Gaps"))
+      }
     }
     .formStyle(.grouped)
     .onAppear {
@@ -80,6 +119,7 @@ struct WindowManagerView: View {
 
 #Preview {
   WindowManagerView()
+    .environment(ConfigStore())
     .environment(AccessibilityPermissionService())
     .environment(
       WindowManagerService(permissionService: AccessibilityPermissionService())

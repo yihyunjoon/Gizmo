@@ -5,6 +5,7 @@ struct GizmoConfig: Equatable {
   var configVersion: Int
   var launcher: LauncherConfig
   var customMenubar: CustomMenubarConfig
+  var gaps: WindowManagerGapsConfig
   var keystats: KeystatsConfig
 
   static let supportedConfigVersion = 1
@@ -13,6 +14,7 @@ struct GizmoConfig: Equatable {
     configVersion: supportedConfigVersion,
     launcher: .default,
     customMenubar: .default,
+    gaps: .default,
     keystats: .default
   )
 }
@@ -98,8 +100,43 @@ struct KeystatsConfig: Equatable {
   )
 }
 
+struct WindowManagerGapsConfig: Equatable {
+  var inner: WindowManagerInnerGaps
+  var outer: WindowManagerOuterGaps
+
+  static let `default` = WindowManagerGapsConfig(
+    inner: .default,
+    outer: .default
+  )
+}
+
+struct WindowManagerInnerGaps: Equatable {
+  var horizontal: Double
+  var vertical: Double
+
+  static let `default` = WindowManagerInnerGaps(
+    horizontal: 0,
+    vertical: 0
+  )
+}
+
+struct WindowManagerOuterGaps: Equatable {
+  var left: Double
+  var top: Double
+  var right: Double
+  var bottom: Double
+
+  static let `default` = WindowManagerOuterGaps(
+    left: 0,
+    top: 0,
+    right: 0,
+    bottom: 0
+  )
+}
+
 struct CustomMenubarConfig: Equatable {
   var enabled: Bool
+  var border: Bool
   var displayScope: CustomMenubarDisplayScope
   var position: CustomMenubarPosition
   var height: Double
@@ -110,6 +147,7 @@ struct CustomMenubarConfig: Equatable {
 
   static let `default` = CustomMenubarConfig(
     enabled: false,
+    border: true,
     displayScope: .all,
     position: .bottom,
     height: 30,

@@ -55,11 +55,19 @@ final class WindowManagerService {
   // MARK: - Properties
 
   private let permissionService: AccessibilityPermissionService
+  private let customMenubarConfigProvider: @MainActor () -> CustomMenubarConfig
+  private let gapsConfigProvider: @MainActor () -> WindowManagerGapsConfig
 
   // MARK: - Initialization
 
-  init(permissionService: AccessibilityPermissionService) {
+  init(
+    permissionService: AccessibilityPermissionService,
+    customMenubarConfigProvider: @escaping @MainActor () -> CustomMenubarConfig = { .default },
+    gapsConfigProvider: @escaping @MainActor () -> WindowManagerGapsConfig = { .default }
+  ) {
     self.permissionService = permissionService
+    self.customMenubarConfigProvider = customMenubarConfigProvider
+    self.gapsConfigProvider = gapsConfigProvider
   }
 
   // MARK: - Public API
@@ -93,8 +101,21 @@ final class WindowManagerService {
       return .failure(.noUsableScreen)
     }
 
-    let targetVisibleFrame = targetScreen.visibleFrame
-    let targetFrame = targetFrame(for: action, in: targetVisibleFrame)
+    let baseVisibleFrame = targetVisibleFrame(for: targetScreen)
+    let gapsConfig = gapsConfigProvider()
+    let usableVisibleFrame = WindowManagerLayoutCalculator.applyOuterGaps(
+      to: baseVisibleFrame,
+      outerGaps: gapsConfig.outer
+    )
+    guard usableVisibleFrame.width >= 1, usableVisibleFrame.height >= 1 else {
+      return .failure(.noUsableScreen)
+    }
+
+    let targetFrame = WindowManagerLayoutCalculator.targetFrame(
+      for: action,
+      in: usableVisibleFrame,
+      innerHorizontalGap: CGFloat(gapsConfig.inner.horizontal)
+    )
     let targetAXFrame = targetFrame.screenFlipped
 
     guard windowElement.setFrame(targetAXFrame) else {
@@ -106,35 +127,44 @@ final class WindowManagerService {
 
   // MARK: - Private
 
-  private func targetFrame(
-    for action: WindowTileAction,
-    in visibleFrame: CGRect
-  ) -> CGRect {
-    switch action {
-    case .leftHalf:
-      let halfWidth = floor(visibleFrame.width / 2.0)
+  private func targetVisibleFrame(for screen: NSScreen) -> CGRect {
+    let baseVisibleFrame = screen.visibleFrame
+    let customMenubarConfig = customMenubarConfigProvider()
+
+    guard customMenubarConfig.enabled else {
+      return baseVisibleFrame
+    }
+
+    guard shouldReserveCustomMenubarSpace(
+      on: screen,
+      scope: customMenubarConfig.displayScope
+    ) else {
+      return baseVisibleFrame
+    }
+
+    let reservedHeight = min(
+      CGFloat(customMenubarConfig.height),
+      max(0, baseVisibleFrame.height - 1)
+    )
+
+    guard reservedHeight > 0 else {
+      return baseVisibleFrame
+    }
+
+    switch customMenubarConfig.position {
+    case .top:
       return CGRect(
-        x: visibleFrame.minX,
-        y: visibleFrame.minY,
-        width: halfWidth,
-        height: visibleFrame.height
+        x: baseVisibleFrame.minX,
+        y: baseVisibleFrame.minY,
+        width: baseVisibleFrame.width,
+        height: baseVisibleFrame.height - reservedHeight
       )
-    case .rightHalf:
-      let halfWidth = floor(visibleFrame.width / 2.0)
+    case .bottom:
       return CGRect(
-        x: visibleFrame.maxX - halfWidth,
-        y: visibleFrame.minY,
-        width: halfWidth,
-        height: visibleFrame.height
-      )
-    case .placeCenter:
-      let targetWidth = max(1, floor(visibleFrame.width * 0.6))
-      let targetHeight = max(1, floor(visibleFrame.height * 0.8))
-      return CGRect(
-        x: floor(visibleFrame.midX - (targetWidth / 2)),
-        y: floor(visibleFrame.midY - (targetHeight / 2)),
-        width: targetWidth,
-        height: targetHeight
+        x: baseVisibleFrame.minX,
+        y: baseVisibleFrame.minY + reservedHeight,
+        width: baseVisibleFrame.width,
+        height: baseVisibleFrame.height - reservedHeight
       )
     }
   }
@@ -159,5 +189,96 @@ final class WindowManagerService {
     }
 
     return bestScreen ?? NSScreen.main
+  }
+
+  private func shouldReserveCustomMenubarSpace(
+    on screen: NSScreen,
+    scope: CustomMenubarDisplayScope
+  ) -> Bool {
+    switch scope {
+    case .all:
+      return true
+    case .active:
+      guard let activeScreen = activeScopeScreen() else { return false }
+      return screenIdentifier(screen) == screenIdentifier(activeScreen)
+    case .primary:
+      guard let primaryScreen = NSScreen.screens.first else { return false }
+      return screenIdentifier(screen) == screenIdentifier(primaryScreen)
+    }
+  }
+
+  private func activeScopeScreen() -> NSScreen? {
+    let mouseLocation = NSEvent.mouseLocation
+    if let mouseScreen = NSScreen.screens.first(where: { NSMouseInRect(mouseLocation, $0.frame, false) }) {
+      return mouseScreen
+    }
+
+    return NSScreen.main ?? NSScreen.screens.first
+  }
+
+  private func screenIdentifier(_ screen: NSScreen) -> String {
+    if let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber {
+      return number.stringValue
+    }
+
+    return UUID().uuidString
+  }
+}
+
+struct WindowManagerLayoutCalculator {
+  static func applyOuterGaps(
+    to frame: CGRect,
+    outerGaps: WindowManagerOuterGaps
+  ) -> CGRect {
+    let left = CGFloat(outerGaps.left)
+    let top = CGFloat(outerGaps.top)
+    let right = CGFloat(outerGaps.right)
+    let bottom = CGFloat(outerGaps.bottom)
+
+    return CGRect(
+      x: frame.minX + left,
+      y: frame.minY + bottom,
+      width: frame.width - left - right,
+      height: frame.height - top - bottom
+    )
+  }
+
+  static func targetFrame(
+    for action: WindowTileAction,
+    in visibleFrame: CGRect,
+    innerHorizontalGap: CGFloat
+  ) -> CGRect {
+    switch action {
+    case .leftHalf:
+      let availableWidth = visibleFrame.width
+      let seam = min(innerHorizontalGap, max(0, availableWidth - 2))
+      let leftWidth = floor((availableWidth - seam) / 2)
+      return CGRect(
+        x: visibleFrame.minX,
+        y: visibleFrame.minY,
+        width: leftWidth,
+        height: visibleFrame.height
+      )
+    case .rightHalf:
+      let availableWidth = visibleFrame.width
+      let seam = min(innerHorizontalGap, max(0, availableWidth - 2))
+      let leftWidth = floor((availableWidth - seam) / 2)
+      let rightWidth = availableWidth - seam - leftWidth
+      return CGRect(
+        x: visibleFrame.minX + leftWidth + seam,
+        y: visibleFrame.minY,
+        width: rightWidth,
+        height: visibleFrame.height
+      )
+    case .placeCenter:
+      let targetWidth = max(1, floor(visibleFrame.width * 0.6))
+      let targetHeight = max(1, floor(visibleFrame.height * 0.8))
+      return CGRect(
+        x: floor(visibleFrame.midX - (targetWidth / 2)),
+        y: floor(visibleFrame.midY - (targetHeight / 2)),
+        width: targetWidth,
+        height: targetHeight
+      )
+    }
   }
 }
