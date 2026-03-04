@@ -289,7 +289,7 @@
 
     },
     "General" : {
-      "extractionState" : "stale",
+      "comment" : "Title for the General tab, shown in the sidebar.",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -866,6 +866,23 @@
         }
       }
     },
+    "Utility" : {
+      "comment" : "Section title for clipboard and stats sidebar items.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Utility"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "유틸리티"
+          }
+        }
+      }
+    },
     "View" : {
 
     },
@@ -877,6 +894,23 @@
     },
     "Widgets" : {
 
+    },
+    "Window" : {
+      "comment" : "Section title for window-related sidebar items.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Window"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "창"
+          }
+        }
+      }
     },
     "Window Gaps" : {
 

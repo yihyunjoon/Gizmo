@@ -1,6 +1,13 @@
 import SwiftUI
 
 enum NavigationItem: Equatable, Hashable, Identifiable {
+  struct SidebarSection: Identifiable {
+    let id: String
+    let title: LocalizedStringResource
+    let items: [NavigationItem]
+  }
+
+  case general
   case heatmap
   case launcher
   case command
@@ -9,18 +16,41 @@ enum NavigationItem: Equatable, Hashable, Identifiable {
   case workspace
   case windowManager
 
-  static let mainPages: [NavigationItem] = [
-    .heatmap,
+  static let primaryItems: [NavigationItem] = [
+    .general,
     .launcher,
     .command,
-    .clipboard,
-    .customMenubar,
-    .workspace,
-    .windowManager
+  ]
+
+  static let sidebarSections: [SidebarSection] = [
+    SidebarSection(
+      id: "window",
+      title: LocalizedStringResource(
+        "Window",
+        comment: "Section title for window-related sidebar items."
+      ),
+      items: [
+        .windowManager,
+        .workspace,
+        .customMenubar,
+      ]
+    ),
+    SidebarSection(
+      id: "utility",
+      title: LocalizedStringResource(
+        "Utility",
+        comment: "Section title for clipboard and stats sidebar items."
+      ),
+      items: [
+        .clipboard,
+        .heatmap,
+      ]
+    ),
   ]
 
   var id: String {
     switch self {
+    case .general: return "General"
     case .heatmap: return "Heatmap"
     case .launcher: return "Launcher"
     case .command: return "Command"
@@ -33,6 +63,11 @@ enum NavigationItem: Equatable, Hashable, Identifiable {
 
   var name: LocalizedStringResource {
     switch self {
+    case .general:
+      LocalizedStringResource(
+        "General",
+        comment: "Title for the General tab, shown in the sidebar."
+      )
     case .heatmap:
       LocalizedStringResource(
         "Heatmap",
@@ -73,6 +108,7 @@ enum NavigationItem: Equatable, Hashable, Identifiable {
 
   var symbolName: String {
     switch self {
+    case .general: "gearshape"
     case .heatmap: "keyboard"
     case .launcher: "command.square"
     case .command: "list.bullet.rectangle"
@@ -85,6 +121,7 @@ enum NavigationItem: Equatable, Hashable, Identifiable {
 
   @MainActor @ViewBuilder func viewForPage() -> some View {
     switch self {
+    case .general: GeneralView()
     case .heatmap: HeatmapView()
     case .launcher: LauncherView()
     case .command: CommandView()
