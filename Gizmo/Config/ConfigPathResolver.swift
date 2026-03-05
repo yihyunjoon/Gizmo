@@ -36,6 +36,12 @@ struct ConfigPathResolver {
       .appending(path: "config.toml", directoryHint: .notDirectory)
   }
 
+  func resolveWorkspaceMappingURL() -> URL {
+    resolveConfigURL()
+      .deletingLastPathComponent()
+      .appending(path: "workspace-mapping.json", directoryHint: .notDirectory)
+  }
+
   func ensureConfigFileExists(at configURL: URL) throws {
     let directoryURL = configURL.deletingLastPathComponent()
 
