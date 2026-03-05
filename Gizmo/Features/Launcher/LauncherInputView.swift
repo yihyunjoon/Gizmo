@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct LauncherInputView: View {
@@ -65,7 +66,7 @@ struct LauncherInputView: View {
           .font(.system(size: 18, weight: .medium))
 
         TextField(
-          String(localized: "Search apps, files, and commands"),
+          String(localized: "Search apps and commands"),
           text: $query
         )
         .textFieldStyle(.plain)
@@ -79,7 +80,7 @@ struct LauncherInputView: View {
       Divider()
 
       if displayedCommands.isEmpty {
-        Text(String(localized: "No matching commands."))
+        Text(String(localized: "No matching results."))
           .font(.system(size: 13, weight: .regular, design: .rounded))
           .foregroundStyle(.secondary)
       } else {
@@ -87,10 +88,7 @@ struct LauncherInputView: View {
           LazyVStack(alignment: .leading, spacing: Layout.rowSpacing) {
             ForEach(Array(displayedCommands.enumerated()), id: \.element.id) {
               index, command in
-              commandRow(
-                title: command.title,
-                isSelected: index == selectedCommandIndex
-              )
+              commandRow(command: command, isSelected: index == selectedCommandIndex)
               .onTapGesture {
                 selectedCommandIndex = index
                 executeSelectedCommand()
@@ -171,9 +169,13 @@ struct LauncherInputView: View {
   // MARK: - Private
 
   @ViewBuilder
-  private func commandRow(title: String, isSelected: Bool) -> some View {
+  private func commandRow(command: LauncherCommand, isSelected: Bool) -> some View {
     HStack {
-      Text(title)
+      if case .launchApplication(let target) = command.action {
+        appIcon(for: target)
+      }
+
+      Text(command.title)
         .font(.system(size: 14, weight: .medium, design: .rounded))
         .foregroundStyle(.primary)
       Spacer(minLength: 0)
@@ -185,6 +187,14 @@ struct LauncherInputView: View {
       RoundedRectangle(cornerRadius: 8, style: .continuous)
         .fill(isSelected ? .blue.opacity(0.22) : .clear)
     )
+  }
+
+  private func appIcon(for target: LauncherApplicationTarget) -> some View {
+    Image(nsImage: NSWorkspace.shared.icon(forFile: target.bundleURL.path()))
+      .resizable()
+      .interpolation(.high)
+      .frame(width: 18, height: 18)
+      .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
   }
 
   private func executeSelectedCommand() {

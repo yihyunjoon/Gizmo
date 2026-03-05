@@ -266,6 +266,9 @@
     "Executed: %@" : {
 
     },
+    "Failed to launch the app." : {
+
+    },
     "Failed to move window." : {
       "localizations" : {
         "en" : {
@@ -411,6 +414,9 @@
         }
       }
     },
+    "Launch app %@" : {
+
+    },
     "Launcher" : {
       "comment" : "Title for the Launcher tab, shown in the sidebar."
     },
@@ -496,6 +502,7 @@
 
     },
     "No matching commands." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -510,6 +517,9 @@
           }
         }
       }
+    },
+    "No matching results." : {
+
     },
     "No usable screen found." : {
       "localizations" : {
@@ -677,10 +687,10 @@
     "Run" : {
 
     },
-    "Search apps, files, and commands" : {
+    "Search apps and commands" : {
 
     },
-    "Search commands" : {
+    "Search commands and apps" : {
 
     },
     "Select a clipboard history item." : {
@@ -786,6 +796,9 @@
           }
         }
       }
+    },
+    "The app is no longer available." : {
+
     },
     "This action cannot be undone." : {
       "localizations" : {

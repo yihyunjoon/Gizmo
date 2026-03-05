@@ -9,6 +9,7 @@ struct AppBootstrap {
   let windowManagerService: WindowManagerService
   let virtualWorkspaceService: VirtualWorkspaceService
   let workspaceFocusObserverService: WorkspaceFocusObserverService
+  let launcherAppCatalogService: LauncherAppCatalogService
   let commandShortcutService: CommandShortcutService
   let launcherPanelService: LauncherPanelService
   let customMenubarRuntimeService: CustomMenubarRuntimeService
@@ -33,10 +34,12 @@ struct AppBootstrap {
     let workspaceFocusObserverService = WorkspaceFocusObserverService(
       permissionService: accessibilityPermissionService
     )
+    let launcherAppCatalogService = LauncherAppCatalogService()
     let commandShortcutService = CommandShortcutService(
       windowManagerService: windowManagerService,
       virtualWorkspaceService: virtualWorkspaceService,
-      initialWorkspaceNames: virtualWorkspaceService.state.workspaceNames
+      initialWorkspaceNames: virtualWorkspaceService.state.workspaceNames,
+      initialApplicationTargets: launcherAppCatalogService.applications
     )
     let launcherPanelService = LauncherPanelService(
       commandShortcutService: commandShortcutService,
@@ -54,6 +57,14 @@ struct AppBootstrap {
       )
       commandShortcutService?.updateWorkspaceCommands(workspaceNames: state.workspaceNames)
       launcherPanelService?.refreshCommandList()
+    }
+    launcherAppCatalogService.onApplicationsDidChange = {
+      [weak commandShortcutService, weak launcherPanelService] applications in
+      commandShortcutService?.updateApplicationCommands(applications)
+      launcherPanelService?.refreshCommandList()
+    }
+    launcherPanelService.onPanelDidOpen = { [weak launcherAppCatalogService] in
+      launcherAppCatalogService?.refreshInBackground()
     }
     customMenubarRuntimeService.setWorkspaceSelectionHandler {
       [weak virtualWorkspaceService] workspaceName in
@@ -86,6 +97,7 @@ struct AppBootstrap {
       focusedWorkspaceName: virtualWorkspaceService.state.activeWorkspaceName
     )
     launcherPanelService.refreshCommandList()
+    launcherAppCatalogService.refreshInBackground()
 
     self.configStore = configStore
     self.hotKeyService = hotKeyService
@@ -93,6 +105,7 @@ struct AppBootstrap {
     self.windowManagerService = windowManagerService
     self.virtualWorkspaceService = virtualWorkspaceService
     self.workspaceFocusObserverService = workspaceFocusObserverService
+    self.launcherAppCatalogService = launcherAppCatalogService
     self.commandShortcutService = commandShortcutService
     self.launcherPanelService = launcherPanelService
     self.customMenubarRuntimeService = customMenubarRuntimeService

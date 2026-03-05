@@ -5,11 +5,24 @@ enum LauncherAction: Equatable {
   case workspaceFocus(String)
   case workspaceBackAndForth
   case moveFocusedWindowToWorkspace(String)
+  case launchApplication(LauncherApplicationTarget)
+}
+
+struct LauncherApplicationTarget: Codable, Equatable {
+  let stableID: String
+  let displayName: String
+  let bundleIdentifier: String?
+  let bundleURL: URL
+
+  var fileName: String {
+    bundleURL.deletingPathExtension().lastPathComponent
+  }
 }
 
 enum LauncherCommandError: Error, Equatable, LocalizedError {
   case windowManager(WindowManagerError)
   case workspace(WorkspaceError)
+  case appLaunch(AppLaunchError)
 
   var errorDescription: String? {
     switch self {
@@ -17,15 +30,33 @@ enum LauncherCommandError: Error, Equatable, LocalizedError {
       return error.errorDescription
     case .workspace(let error):
       return error.errorDescription
+    case .appLaunch(let error):
+      return error.errorDescription
     }
   }
 
   var isAccessibilityPermissionError: Bool {
     switch self {
-    case .windowManager(.permissionDenied), .workspace(.permissionDenied):
-      return true
-    default:
+    case .windowManager(let error):
+      return error == .permissionDenied
+    case .workspace(let error):
+      return error == .permissionDenied
+    case .appLaunch:
       return false
+    }
+  }
+}
+
+enum AppLaunchError: Error, Equatable, LocalizedError {
+  case appNotFound
+  case openFailed
+
+  var errorDescription: String? {
+    switch self {
+    case .appNotFound:
+      return String(localized: "The app is no longer available.")
+    case .openFailed:
+      return String(localized: "Failed to launch the app.")
     }
   }
 }
@@ -36,11 +67,15 @@ struct LauncherCommand: Identifiable, Equatable {
   let keywords: [String]
   let action: LauncherAction
 
-  static func makeAll(workspaceNames: [String]) -> [LauncherCommand] {
+  static func makeAll(
+    workspaceNames: [String],
+    applicationTargets: [LauncherApplicationTarget] = []
+  ) -> [LauncherCommand] {
     makeTileCommands()
       + makeWorkspaceFocusCommands(workspaceNames: workspaceNames)
       + [makeWorkspaceBackAndForthCommand()]
       + makeMoveFocusedWindowCommands(workspaceNames: workspaceNames)
+      + makeAppLaunchCommands(applicationTargets: applicationTargets)
   }
 
   private static func makeTileCommands() -> [LauncherCommand] {
@@ -97,6 +132,31 @@ struct LauncherCommand: Identifiable, Equatable {
         title: String(localized: "Move Focused Window to Workspace \(workspaceName)"),
         keywords: ["workspace", "move", "focused", "window", workspaceName],
         action: .moveFocusedWindowToWorkspace(workspaceName)
+      )
+    }
+  }
+
+  private static func makeAppLaunchCommands(
+    applicationTargets: [LauncherApplicationTarget]
+  ) -> [LauncherCommand] {
+    applicationTargets.map { target in
+      let keywordCandidates: [String?] = [
+        "app",
+        "open",
+        "launch",
+        target.displayName,
+        target.fileName,
+        target.bundleIdentifier,
+      ]
+      let keywords = keywordCandidates
+        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+
+      return LauncherCommand(
+        id: "app-launch-\(target.stableID)",
+        title: target.displayName,
+        keywords: keywords,
+        action: .launchApplication(target)
       )
     }
   }

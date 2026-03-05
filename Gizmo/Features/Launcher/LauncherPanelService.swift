@@ -15,6 +15,7 @@ final class LauncherPanelService: NSObject, NSWindowDelegate {
   private let configStore: ConfigStore
 
   var onOpenMainWindowRequest: ((_ targetCenter: CGPoint?) -> Void)?
+  var onPanelDidOpen: (() -> Void)?
 
   private var panel: LauncherPanel?
   private var panelHostingController: NSHostingController<LauncherInputView>?
@@ -64,6 +65,7 @@ final class LauncherPanelService: NSObject, NSWindowDelegate {
     panel.setContentSize(NSSize(width: PanelLayout.width, height: PanelLayout.height))
     positionPanelOnActiveScreen(panel)
     panel.makeKeyAndOrderFront(nil)
+    onPanelDidOpen?()
 
     NotificationCenter.default.post(
       name: .launcherPanelDidOpen,

@@ -61,7 +61,7 @@ struct CommandView: View {
       }
     }
     .formStyle(.grouped)
-    .searchable(text: $query, prompt: String(localized: "Search commands"))
+    .searchable(text: $query, prompt: String(localized: "Search commands and apps"))
   }
 
   @ViewBuilder
@@ -114,6 +114,8 @@ struct CommandView: View {
       return String(localized: "Switch between current and previous workspace")
     case .moveFocusedWindowToWorkspace(let name):
       return String(localized: "Move focused window to workspace \(name)")
+    case .launchApplication(let target):
+      return String(localized: "Launch app \(target.displayName)")
     }
   }
 }

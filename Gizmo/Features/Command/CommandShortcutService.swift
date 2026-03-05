@@ -8,18 +8,29 @@ import Observation
 final class CommandShortcutService {
   private let windowManagerService: WindowManagerService
   private let virtualWorkspaceService: VirtualWorkspaceService
+  private let fileManager: FileManager
 
   private(set) var commands: [LauncherCommand]
   private var shortcutEventTasks: [String: Task<Void, Never>] = [:]
+  private var workspaceNames: [String]
+  private var applicationTargets: [LauncherApplicationTarget]
 
   init(
     windowManagerService: WindowManagerService,
     virtualWorkspaceService: VirtualWorkspaceService,
-    initialWorkspaceNames: [String]
+    initialWorkspaceNames: [String],
+    initialApplicationTargets: [LauncherApplicationTarget] = [],
+    fileManager: FileManager = .default
   ) {
     self.windowManagerService = windowManagerService
     self.virtualWorkspaceService = virtualWorkspaceService
-    self.commands = LauncherCommand.makeAll(workspaceNames: initialWorkspaceNames)
+    self.workspaceNames = initialWorkspaceNames
+    self.applicationTargets = initialApplicationTargets
+    self.fileManager = fileManager
+    self.commands = LauncherCommand.makeAll(
+      workspaceNames: initialWorkspaceNames,
+      applicationTargets: initialApplicationTargets
+    )
     rebuildShortcutEventStreams()
   }
 
@@ -31,11 +42,15 @@ final class CommandShortcutService {
   }
 
   func updateWorkspaceCommands(workspaceNames: [String]) {
-    let nextCommands = LauncherCommand.makeAll(workspaceNames: workspaceNames)
-    guard nextCommands != commands else { return }
+    guard workspaceNames != self.workspaceNames else { return }
+    self.workspaceNames = workspaceNames
+    rebuildCommands()
+  }
 
-    commands = nextCommands
-    rebuildShortcutEventStreams()
+  func updateApplicationCommands(_ applicationTargets: [LauncherApplicationTarget]) {
+    guard applicationTargets != self.applicationTargets else { return }
+    self.applicationTargets = applicationTargets
+    rebuildCommands()
   }
 
   func shortcutName(for command: LauncherCommand) -> KeyboardShortcuts.Name {
@@ -69,6 +84,8 @@ final class CommandShortcutService {
           preferredWindowElement: preferredWindowElement
         )
       )
+    case .launchApplication(let target):
+      return executeAppLaunch(target)
     }
   }
 
@@ -92,6 +109,33 @@ final class CommandShortcutService {
     case .failure(let error):
       return .failure(.workspace(error))
     }
+  }
+
+  private func executeAppLaunch(
+    _ target: LauncherApplicationTarget
+  ) -> Result<Void, LauncherCommandError> {
+    let bundlePath = target.bundleURL.path()
+
+    guard fileManager.fileExists(atPath: bundlePath) else {
+      return .failure(.appLaunch(.appNotFound))
+    }
+
+    guard NSWorkspace.shared.open(target.bundleURL) else {
+      return .failure(.appLaunch(.openFailed))
+    }
+
+    return .success(())
+  }
+
+  private func rebuildCommands() {
+    let nextCommands = LauncherCommand.makeAll(
+      workspaceNames: workspaceNames,
+      applicationTargets: applicationTargets
+    )
+    guard nextCommands != commands else { return }
+
+    commands = nextCommands
+    rebuildShortcutEventStreams()
   }
 
   private func rebuildShortcutEventStreams() {
