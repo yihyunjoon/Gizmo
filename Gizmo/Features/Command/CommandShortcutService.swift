@@ -114,7 +114,8 @@ final class CommandShortcutService {
   private func executeAppLaunch(
     _ target: LauncherApplicationTarget
   ) -> Result<Void, LauncherCommandError> {
-    let bundlePath = target.bundleURL.path()
+    // Use decoded file-system path; URL.path() may keep percent-encoding like `%20`.
+    let bundlePath = target.bundleURL.path
 
     guard fileManager.fileExists(atPath: bundlePath) else {
       return .failure(.appLaunch(.appNotFound))
