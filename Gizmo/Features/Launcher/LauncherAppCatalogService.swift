@@ -110,28 +110,12 @@ final class LauncherAppCatalogService {
         continue
       }
 
-      guard
-        let enumerator = FileManager.default.enumerator(
-          at: rootURL,
-          includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey],
-          options: [.skipsHiddenFiles, .skipsPackageDescendants],
-          errorHandler: { _, _ in true }
-        )
-      else {
-        continue
-      }
-
-      for case let candidateURL as URL in enumerator {
-        guard candidateURL.pathExtension.caseInsensitiveCompare("app") == .orderedSame else {
-          continue
-        }
-
-        let standardizedURL = candidateURL.standardizedFileURL
-        let target = makeApplicationTarget(at: standardizedURL)
-        let dedupeKey = target.bundleIdentifier?.lowercased() ?? standardizedURL.path().lowercased()
+      for candidateURL in applicationCandidateURLs(in: rootURL) {
+        let target = makeApplicationTarget(at: candidateURL)
+        let dedupeKey = target.bundleIdentifier?.lowercased() ?? candidateURL.path().lowercased()
 
         if let existing = dedupedApplications[dedupeKey] {
-          if shouldReplace(existing: existing, withRootPriority: rootPriority, candidateURL: standardizedURL)
+          if shouldReplace(existing: existing, withRootPriority: rootPriority, candidateURL: candidateURL)
           {
             dedupedApplications[dedupeKey] = RankedApplication(
               target: target,
@@ -158,6 +142,62 @@ final class LauncherAppCatalogService {
 
         return lhs.bundleURL.path().localizedStandardCompare(rhs.bundleURL.path()) == .orderedAscending
       }
+  }
+
+  private nonisolated static func applicationCandidateURLs(in rootURL: URL) -> [URL] {
+    var candidateURLs: [URL] = []
+    var seenPaths: Set<String> = []
+
+    func appendCandidate(_ candidateURL: URL) {
+      guard candidateURL.pathExtension.caseInsensitiveCompare("app") == .orderedSame else {
+        return
+      }
+
+      let standardizedURL = candidateURL.standardizedFileURL
+      guard seenPaths.insert(standardizedURL.path).inserted else {
+        return
+      }
+
+      candidateURLs.append(standardizedURL)
+    }
+
+    if let enumerator = FileManager.default.enumerator(
+      at: rootURL,
+      includingPropertiesForKeys: [.isDirectoryKey, .isRegularFileKey],
+      options: [.skipsHiddenFiles, .skipsPackageDescendants],
+      errorHandler: { _, _ in true }
+    ) {
+      for case let candidateURL as URL in enumerator {
+        appendCandidate(candidateURL)
+      }
+    }
+
+    for candidateURL in topLevelApplicationSymlinks(in: rootURL) {
+      appendCandidate(candidateURL)
+    }
+
+    return candidateURLs
+  }
+
+  private nonisolated static func topLevelApplicationSymlinks(in rootURL: URL) -> [URL] {
+    guard
+      let childURLs = try? FileManager.default.contentsOfDirectory(
+        at: rootURL,
+        includingPropertiesForKeys: [.isSymbolicLinkKey],
+        options: []
+      )
+    else {
+      return []
+    }
+
+    return childURLs.filter { childURL in
+      guard childURL.pathExtension.caseInsensitiveCompare("app") == .orderedSame else {
+        return false
+      }
+
+      let resourceValues = try? childURL.resourceValues(forKeys: [.isSymbolicLinkKey])
+      return resourceValues?.isSymbolicLink == true
+    }
   }
 
   private nonisolated static func shouldReplace(

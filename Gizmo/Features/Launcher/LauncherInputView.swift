@@ -19,6 +19,9 @@ struct LauncherInputView: View {
     static let rowHeight: CGFloat = 33
     static let rowSpacing: CGFloat = 6
     static let listVerticalPadding: CGFloat = 2
+    static let leadingSlotSize: CGFloat = 18
+    static let iconCornerRadius: CGFloat = 4
+    static let rowContentSpacing: CGFloat = 8
   }
 
   // MARK: - Properties
@@ -181,10 +184,8 @@ struct LauncherInputView: View {
 
   @ViewBuilder
   private func commandRow(command: LauncherCommand, isSelected: Bool) -> some View {
-    HStack {
-      if case .launchApplication(let target) = command.action {
-        appIcon(for: target)
-      }
+    HStack(spacing: Layout.rowContentSpacing) {
+      leadingAccessory(for: command)
 
       Text(command.title)
         .font(.system(size: 14, weight: .medium, design: .rounded))
@@ -200,12 +201,26 @@ struct LauncherInputView: View {
     )
   }
 
+  @ViewBuilder
+  private func leadingAccessory(for command: LauncherCommand) -> some View {
+    Group {
+      if case .launchApplication(let target) = command.action {
+        appIcon(for: target)
+      } else {
+        Color.clear
+      }
+    }
+    .frame(width: Layout.leadingSlotSize, height: Layout.leadingSlotSize)
+  }
+
   private func appIcon(for target: LauncherApplicationTarget) -> some View {
-    Image(nsImage: NSWorkspace.shared.icon(forFile: target.bundleURL.path()))
+    let iconPath = target.bundleURL.resolvingSymlinksInPath().path
+
+    return Image(nsImage: NSWorkspace.shared.icon(forFile: iconPath))
       .resizable()
       .interpolation(.high)
-      .frame(width: 18, height: 18)
-      .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+      .frame(width: Layout.leadingSlotSize, height: Layout.leadingSlotSize)
+      .clipShape(RoundedRectangle(cornerRadius: Layout.iconCornerRadius, style: .continuous))
   }
 
   private func executeSelectedCommand() {
