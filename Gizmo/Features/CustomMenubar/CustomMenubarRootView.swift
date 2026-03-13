@@ -9,53 +9,22 @@ struct CustomMenubarRootView: View {
       Color.black.opacity(model.config.backgroundOpacity)
 
       HStack(spacing: 10) {
-        HStack(spacing: 6) {
-          ForEach(model.workspaceNames, id: \.self) { workspaceName in
-            Button {
-              onWorkspaceTap(workspaceName)
-            } label: {
-              Text(workspaceName)
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundStyle(
-                  model.isFocusedWorkspace(workspaceName)
-                    ? Color.white.opacity(0.96)
-                    : Color.white.opacity(0.74)
-                )
-                .padding(.horizontal, 7)
-                .padding(.vertical, 3)
-                .background(
-                  Capsule(style: .continuous)
-                    .fill(
-                      model.isFocusedWorkspace(workspaceName)
-                        ? Color.white.opacity(0.24)
-                        : Color.white.opacity(0.12)
-                    )
-                )
-            }
-            .buttonStyle(.plain)
-          }
-        }
-
-        Spacer(minLength: 0)
-
-        if model.hasWidget(.frontApp) {
-          Text(model.frontAppName)
-            .font(.system(size: 11, weight: .regular))
-            .foregroundStyle(.white.opacity(0.92))
-            .lineLimit(1)
-        }
-
+        workspaceStrip
         Spacer(minLength: 0)
 
         if model.hasWidget(.clock) {
-          Text(model.clockText)
-            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-            .foregroundStyle(.white.opacity(0.96))
-            .lineLimit(1)
+          clockView
         }
       }
       .padding(.horizontal, CGFloat(model.config.horizontalPadding))
       .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+      if model.hasWidget(.frontApp) {
+        frontAppView
+          .padding(.horizontal, CGFloat(model.config.horizontalPadding))
+          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+          .allowsHitTesting(false)
+      }
     }
     .frame(height: CGFloat(model.config.height))
     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -69,6 +38,52 @@ struct CustomMenubarRootView: View {
     .onTapGesture {
       // Intentionally capture background clicks to keep full-width interaction behavior.
     }
+  }
+}
+
+private extension CustomMenubarRootView {
+  var workspaceStrip: some View {
+    HStack(spacing: 6) {
+      ForEach(model.workspaceNames, id: \.self) { workspaceName in
+        Button {
+          onWorkspaceTap(workspaceName)
+        } label: {
+          Text(workspaceName)
+            .font(.system(size: 11, weight: .semibold, design: .rounded))
+            .foregroundStyle(
+              model.isFocusedWorkspace(workspaceName)
+                ? Color.white.opacity(0.96)
+                : Color.white.opacity(0.74)
+            )
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(
+              Capsule(style: .continuous)
+                .fill(
+                  model.isFocusedWorkspace(workspaceName)
+                    ? Color.white.opacity(0.24)
+                    : Color.white.opacity(0.12)
+                )
+            )
+        }
+        .buttonStyle(.plain)
+      }
+    }
+  }
+
+  var frontAppView: some View {
+    Text(model.frontAppName)
+      .font(.system(size: 11, weight: .regular))
+      .foregroundStyle(.white.opacity(0.92))
+      .lineLimit(1)
+      .truncationMode(.tail)
+  }
+
+  var clockView: some View {
+    Text(model.clockText)
+      .font(.system(size: 11, weight: .semibold, design: .monospaced))
+      .foregroundStyle(.white.opacity(0.96))
+      .lineLimit(1)
   }
 }
 
