@@ -98,6 +98,12 @@ struct LauncherCommand: Identifiable, Equatable {
         keywords: ["place", "center", "window", "resize", "middle"],
         action: .tile(.placeCenter)
       ),
+      LauncherCommand(
+        id: WindowTileAction.fullScreen.commandID,
+        title: WindowTileAction.fullScreen.commandTitle,
+        keywords: ["fill", "full", "screen", "maximize", "window"],
+        action: .tile(.fullScreen)
+      ),
     ]
   }
 

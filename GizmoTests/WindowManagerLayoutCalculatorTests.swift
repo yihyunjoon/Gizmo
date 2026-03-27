@@ -40,6 +40,18 @@ final class WindowManagerLayoutCalculatorTests: XCTestCase {
     XCTAssertEqual(right.minX - left.maxX, 4)
   }
 
+  func testFullScreenUsesVisibleFrame() {
+    let visibleFrame = CGRect(x: 12, y: 34, width: 220, height: 140)
+
+    let target = WindowManagerLayoutCalculator.targetFrame(
+      for: .fullScreen,
+      in: visibleFrame,
+      innerHorizontalGap: 0
+    )
+
+    XCTAssertEqual(target, visibleFrame)
+  }
+
   func testExcessiveOuterGapsCanProduceInvalidFrame() {
     let visibleFrame = CGRect(x: 0, y: 0, width: 50, height: 50)
     let outer = WindowManagerOuterGaps(

@@ -5,6 +5,7 @@ enum WindowTileAction: String, CaseIterable {
   case leftHalf
   case rightHalf
   case placeCenter
+  case fullScreen
 
   var commandID: String {
     switch self {
@@ -14,6 +15,8 @@ enum WindowTileAction: String, CaseIterable {
       return "tile-right-half"
     case .placeCenter:
       return "place-center"
+    case .fullScreen:
+      return "tile-full-screen"
     }
   }
 
@@ -25,6 +28,8 @@ enum WindowTileAction: String, CaseIterable {
       return String(localized: "Tile right half")
     case .placeCenter:
       return String(localized: "Place center")
+    case .fullScreen:
+      return String(localized: "Fill screen")
     }
   }
 }
@@ -312,6 +317,8 @@ struct WindowManagerLayoutCalculator {
         width: targetWidth,
         height: targetHeight
       )
+    case .fullScreen:
+      return visibleFrame
     }
   }
 }
