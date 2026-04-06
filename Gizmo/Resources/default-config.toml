@@ -14,7 +14,7 @@ modifiers = ["command"] # command | shift | option | control | function
 [custom_menubar]
 enabled = false
 border = true
-display_scope = "all" # all | active | primary
+display_scope = "primary" # all | active | primary
 position = "bottom" # top | bottom
 height = 30
 widgets = ["front_app", "clock"] # front_app | clock

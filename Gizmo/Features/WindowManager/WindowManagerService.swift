@@ -142,10 +142,7 @@ final class WindowManagerService {
       return baseVisibleFrame
     }
 
-    guard shouldReserveCustomMenubarSpace(
-      on: screen,
-      scope: customMenubarConfig.displayScope
-    ) else {
+    guard shouldReserveCustomMenubarSpace(on: screen) else {
       return baseVisibleFrame
     }
 
@@ -199,28 +196,11 @@ final class WindowManagerService {
   }
 
   private func shouldReserveCustomMenubarSpace(
-    on screen: NSScreen,
-    scope: CustomMenubarDisplayScope
+    on screen: NSScreen
   ) -> Bool {
-    switch scope {
-    case .all:
-      return true
-    case .active:
-      guard let activeScreen = activeScopeScreen() else { return false }
-      return screenIdentifier(screen) == screenIdentifier(activeScreen)
-    case .primary:
-      guard let primaryScreen = NSScreen.screens.first else { return false }
-      return screenIdentifier(screen) == screenIdentifier(primaryScreen)
-    }
-  }
-
-  private func activeScopeScreen() -> NSScreen? {
-    let mouseLocation = NSEvent.mouseLocation
-    if let mouseScreen = NSScreen.screens.first(where: { NSMouseInRect(mouseLocation, $0.frame, false) }) {
-      return mouseScreen
-    }
-
-    return NSScreen.main ?? NSScreen.screens.first
+    // Custom menubar currently renders only on the primary display.
+    guard let primaryScreen = NSScreen.screens.first else { return false }
+    return screenIdentifier(screen) == screenIdentifier(primaryScreen)
   }
 
   private func screenIdentifier(_ screen: NSScreen) -> String {

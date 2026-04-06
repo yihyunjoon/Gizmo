@@ -254,33 +254,14 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
   }
 
   private func resolvedScreens(scope: CustomMenubarDisplayScope) -> [NSScreen] {
-    switch scope {
-    case .all:
-      return NSScreen.screens
+    // Gizmo currently renders the custom menubar only on the primary display.
+    let _ = scope
 
-    case .active:
-      if let screen = screenUnderMousePointer() {
-        return [screen]
-      }
-
-      if let mainScreen = NSScreen.main {
-        return [mainScreen]
-      }
-
-      return Array(NSScreen.screens.prefix(1))
-
-    case .primary:
-      if let mainScreen = NSScreen.screens.first {
-        return [mainScreen]
-      }
-
-      return []
+    if let primaryScreen = NSScreen.screens.first {
+      return [primaryScreen]
     }
-  }
 
-  private func screenUnderMousePointer() -> NSScreen? {
-    let mouseLocation = NSEvent.mouseLocation
-    return NSScreen.screens.first(where: { NSMouseInRect(mouseLocation, $0.frame, false) })
+    return []
   }
 
   private func screenIdentifier(_ screen: NSScreen) -> String {

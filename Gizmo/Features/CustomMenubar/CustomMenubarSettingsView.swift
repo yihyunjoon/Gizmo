@@ -22,7 +22,7 @@ struct CustomMenubarSettingsView: View {
 
         LabeledContent(
           String(localized: "Display Scope"),
-          value: configStore.active.customMenubar.displayScope.titleText
+          value: String(localized: "Primary Display")
         )
 
         LabeledContent(
@@ -70,19 +70,6 @@ struct CustomMenubarSettingsView: View {
       }
     }
     .formStyle(.grouped)
-  }
-}
-
-private extension CustomMenubarDisplayScope {
-  var titleText: String {
-    switch self {
-    case .all:
-      return String(localized: "All Displays")
-    case .active:
-      return String(localized: "Active Display")
-    case .primary:
-      return String(localized: "Primary Display")
-    }
   }
 }
 

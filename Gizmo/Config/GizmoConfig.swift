@@ -168,7 +168,7 @@ struct CustomMenubarConfig: Equatable {
   static let `default` = CustomMenubarConfig(
     enabled: false,
     border: true,
-    displayScope: .all,
+    displayScope: .primary,
     position: .bottom,
     height: 30,
     widgets: [.frontApp, .clock],
