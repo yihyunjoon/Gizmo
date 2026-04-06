@@ -569,6 +569,67 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
     XCTAssertTrue(persistedSnapshot.savedFrames.isEmpty)
   }
 
+  func testWorkspaceSwitchLeavesSecondaryDisplayWindowsUnmanaged() {
+    let primaryWindow = makeWindow(key: "axwn:100")
+    let secondaryWindow = makeWindow(key: "axwn:200")
+
+    let driver = MockWorkspaceWindowDriver(
+      manageableWindows: [primaryWindow, secondaryWindow],
+      frames: [
+        primaryWindow.key: CGRect(x: 100, y: 100, width: 700, height: 500),
+        secondaryWindow.key: CGRect(x: 2200, y: 120, width: 700, height: 500),
+      ],
+      visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080)
+    )
+    let service = VirtualWorkspaceService(
+      driver: driver,
+      initialConfig: makeWorkspaceConfig(),
+      workspaceMappingStore: MockWorkspaceMappingStore()
+    )
+
+    driver.focusedWindow = primaryWindow
+    service.synchronizeActiveWorkspaceToFocusedWindowIfNeeded()
+    driver.resetRecordedCalls()
+
+    _ = service.focusWorkspace("2")
+
+    XCTAssertEqual(service.managedWindowKeys(in: "1"), [primaryWindow.key])
+    XCTAssertTrue(service.managedWindowKeys(in: "2").isEmpty)
+    XCTAssertEqual(driver.setFrameCalls.map(\.windowKey), [primaryWindow.key])
+  }
+
+  func testMoveFocusedSecondaryDisplayWindowRemovesItFromTrackedWorkspaces() {
+    let primaryWindow = makeWindow(key: "axwn:100")
+    let secondaryWindow = makeWindow(key: "axwn:200")
+
+    let driver = MockWorkspaceWindowDriver(
+      manageableWindows: [primaryWindow, secondaryWindow],
+      frames: [
+        primaryWindow.key: CGRect(x: 100, y: 100, width: 700, height: 500),
+        secondaryWindow.key: CGRect(x: 2200, y: 120, width: 700, height: 500),
+      ],
+      visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080)
+    )
+    let service = VirtualWorkspaceService(
+      driver: driver,
+      initialConfig: makeWorkspaceConfig(),
+      workspaceMappingStore: MockWorkspaceMappingStore()
+    )
+
+    driver.focusedWindow = primaryWindow
+    service.synchronizeActiveWorkspaceToFocusedWindowIfNeeded()
+
+    driver.focusedWindow = secondaryWindow
+    driver.resetRecordedCalls()
+
+    let result = service.moveFocusedWindowToWorkspace("2")
+
+    XCTAssertEqual(result, .success(()))
+    XCTAssertEqual(service.managedWindowKeys(in: "1"), [primaryWindow.key])
+    XCTAssertTrue(service.managedWindowKeys(in: "2").isEmpty)
+    XCTAssertTrue(driver.setFrameCalls.isEmpty)
+  }
+
   private func makeWorkspaceConfig() -> WorkspaceConfig {
     WorkspaceConfig(
       enabled: true,

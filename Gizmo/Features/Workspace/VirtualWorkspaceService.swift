@@ -229,7 +229,8 @@ final class LiveWorkspaceWindowDriver: WorkspaceWindowDriver {
   }
 
   func singleMonitorVisibleFrame() -> CGRect? {
-    (NSScreen.main ?? NSScreen.screens.first)?.visibleFrame
+    // Workspace currently manages only the primary display.
+    NSScreen.screens.first?.visibleFrame
   }
 
   private func currentWindowNumbers(excludingPID excludedPID: pid_t) -> Set<Int> {
@@ -552,6 +553,9 @@ final class VirtualWorkspaceService {
     if isSpecialWindow(focusedWindow) {
       return
     }
+    guard isOnPrimaryMonitor(focusedWindow) else {
+      return
+    }
 
     guard let focusedWindowWorkspace = workspaceName(for: focusedWindow.key) else {
       return
@@ -670,6 +674,12 @@ final class VirtualWorkspaceService {
       notifyStateDidChange()
       return .success(())
     }
+    if !isOnPrimaryMonitor(focusedWindow) {
+      removeWindowFromAllWorkspaces(focusedWindow)
+      savedFrames.removeValue(forKey: focusedWindow.key)
+      notifyStateDidChange()
+      return .success(())
+    }
 
     removeWindowFromAllWorkspaces(focusedWindow)
     Self.appendUnique(focusedWindow, to: &workspaceWindows[workspaceName, default: []])
@@ -687,7 +697,7 @@ final class VirtualWorkspaceService {
   func restoreAllWindows() {
     pruneDeadWindows()
 
-    let visibleFrame = driver.singleMonitorVisibleFrame()
+    let visibleFrame = primaryDisplayVisibleFrame
     let windows = allManagedWindows
 
     for window in windows {
@@ -766,6 +776,16 @@ final class VirtualWorkspaceService {
     return orderedWindows
   }
 
+  private var primaryDisplayVisibleFrame: CGRect? {
+    driver.singleMonitorVisibleFrame()
+  }
+
+  private var manageableWindowsOnPrimaryMonitor: [ManagedWindowRef] {
+    driver.allManageableWindows().filter { window in
+      !isSpecialWindow(window) && isOnPrimaryMonitor(window)
+    }
+  }
+
   private func reconcileVisibility() -> Bool {
     var success = true
     for workspaceName in workspaceNames {
@@ -787,7 +807,7 @@ final class VirtualWorkspaceService {
     guard let currentFrame = driver.frame(for: window) else {
       return false
     }
-    guard let visibleFrame = driver.singleMonitorVisibleFrame() else {
+    guard let visibleFrame = primaryDisplayVisibleFrame else {
       return false
     }
 
@@ -813,7 +833,7 @@ final class VirtualWorkspaceService {
   }
 
   private func pruneDeadWindows() {
-    let liveWindows = driver.allManageableWindows().filter { !isSpecialWindow($0) }
+    let liveWindows = manageableWindowsOnPrimaryMonitor
     let liveWindowsByKey = Dictionary(uniqueKeysWithValues: liveWindows.map { ($0.key, $0) })
 
     for workspaceName in workspaceNames {
@@ -848,7 +868,7 @@ final class VirtualWorkspaceService {
 
     var restoredWorkspaceWindows: [String: [ManagedWindowRef]] =
       Dictionary(uniqueKeysWithValues: workspaceNames.map { ($0, []) })
-    let liveWindows = driver.allManageableWindows().filter { !isSpecialWindow($0) }
+    let liveWindows = manageableWindowsOnPrimaryMonitor
     let liveWindowsByKey = Dictionary(uniqueKeysWithValues: liveWindows.map { ($0.key, $0) })
     var assignedWindowKeys: Set<WindowKey> = []
 
@@ -895,8 +915,8 @@ final class VirtualWorkspaceService {
     guard driver.isAccessibilityGranted() else { return }
 
     let knownKeys = Set(allManagedWindows.map(\.key))
-    for window in driver.allManageableWindows()
-    where !isSpecialWindow(window) && !knownKeys.contains(window.key)
+    for window in manageableWindowsOnPrimaryMonitor
+    where !knownKeys.contains(window.key)
     {
       Self.appendUnique(window, to: &workspaceWindows[activeWorkspaceName, default: []])
     }
@@ -970,6 +990,20 @@ final class VirtualWorkspaceService {
   private func clearLastFocusedManagedWindow() {
     lastFocusedManagedWindowKey = nil
     lastFocusedManagedWindowWorkspaceName = nil
+  }
+
+  private func isOnPrimaryMonitor(_ window: ManagedWindowRef) -> Bool {
+    guard let primaryDisplayVisibleFrame else {
+      return true
+    }
+
+    let frame = savedFrames[window.key] ?? driver.frame(for: window)
+    guard let frame, !frame.isNull else {
+      return false
+    }
+
+    let center = CGPoint(x: frame.midX, y: frame.midY)
+    return primaryDisplayVisibleFrame.contains(center)
   }
 
   private func isSpecialWindow(_ window: ManagedWindowRef) -> Bool {
