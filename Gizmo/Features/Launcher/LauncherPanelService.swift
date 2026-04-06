@@ -185,6 +185,24 @@ final class LauncherPanelService: NSObject, NSWindowDelegate {
       },
       onExecuteCommand: { [weak self] command in
         guard let self else { return .failure(.windowManager(.applyFailed)) }
+
+        if case .launchApplication(let target) = command.action {
+          let validationResult = self.commandShortcutService.validateAppLaunch(target)
+          guard case .success = validationResult else {
+            return validationResult
+          }
+
+          self.focusedWindowBeforePanelOpen = nil
+
+          // Launch after the panel closes so launcher dismissal is not blocked by app startup.
+          Task { @MainActor [weak self] in
+            guard let self else { return }
+            _ = self.commandShortcutService.execute(command)
+          }
+
+          return .success(())
+        }
+
         let result = self.commandShortcutService.execute(
           command,
           preferredWindowElement: self.focusedWindowBeforePanelOpen

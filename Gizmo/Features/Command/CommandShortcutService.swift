@@ -114,15 +114,26 @@ final class CommandShortcutService {
   private func executeAppLaunch(
     _ target: LauncherApplicationTarget
   ) -> Result<Void, LauncherCommandError> {
+    let validationResult = validateAppLaunch(target)
+    guard case .success = validationResult else {
+      return validationResult
+    }
+
+    guard NSWorkspace.shared.open(target.bundleURL) else {
+      return .failure(.appLaunch(.openFailed))
+    }
+
+    return .success(())
+  }
+
+  func validateAppLaunch(
+    _ target: LauncherApplicationTarget
+  ) -> Result<Void, LauncherCommandError> {
     // Use decoded file-system path; URL.path() may keep percent-encoding like `%20`.
     let bundlePath = target.bundleURL.path
 
     guard fileManager.fileExists(atPath: bundlePath) else {
       return .failure(.appLaunch(.appNotFound))
-    }
-
-    guard NSWorkspace.shared.open(target.bundleURL) else {
-      return .failure(.appLaunch(.openFailed))
     }
 
     return .success(())
