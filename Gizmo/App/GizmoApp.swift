@@ -69,7 +69,7 @@ struct GizmoApp: App {
 
     MenuBarExtra(
       String(localized: "Gizmo"),
-      systemImage: "keyboard"
+      systemImage: "staroflife.circle"
     ) {
       MenuBarView(
         onToggleLauncher: {
