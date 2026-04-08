@@ -200,4 +200,69 @@ final class GizmoConfigParserTests: XCTestCase {
     XCTAssertEqual(config?.gaps, .default)
   }
 
+  func testParseWorkspaceDisplaySetsAndMode() throws {
+    let result = parser.parse(
+      """
+      config-version = 1
+
+      [workspace]
+      enabled = true
+      mode = "per_display"
+      hide_strategy = "corner_offscreen"
+
+      [workspace.display_sets.primary]
+      names = ["q", "w", "e"]
+
+      [workspace.display_sets.secondary]
+      names = ["3", "4"]
+      """
+    )
+
+    XCTAssertNotNil(result.config)
+    XCTAssertTrue(result.errors.isEmpty)
+
+    let config = try XCTUnwrap(result.config)
+    XCTAssertEqual(config.workspace.mode, .perDisplay)
+    XCTAssertEqual(config.workspace.primaryNames, ["q", "w", "e"])
+    XCTAssertEqual(config.workspace.secondaryNames, ["3", "4"])
+  }
+
+  func testLegacyWorkspaceNamesPopulatePrimaryDisplaySet() throws {
+    let result = parser.parse(
+      """
+      config-version = 1
+
+      [workspace]
+      names = ["1", "2"]
+      """
+    )
+
+    XCTAssertNotNil(result.config)
+    XCTAssertTrue(result.errors.isEmpty)
+
+    let config = try XCTUnwrap(result.config)
+    XCTAssertEqual(config.workspace.mode, .primaryOnly)
+    XCTAssertEqual(config.workspace.primaryNames, ["1", "2"])
+  }
+
+  func testDuplicateWorkspaceNamesAcrossDisplaysReturnError() {
+    let result = parser.parse(
+      """
+      config-version = 1
+
+      [workspace]
+      mode = "per_display"
+
+      [workspace.display_sets.primary]
+      names = ["q", "w"]
+
+      [workspace.display_sets.secondary]
+      names = ["w", "4"]
+      """
+    )
+
+    XCTAssertNil(result.config)
+    XCTAssertTrue(result.errors.contains { $0.contains("globally unique") })
+  }
+
 }

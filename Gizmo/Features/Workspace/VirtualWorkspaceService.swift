@@ -75,6 +75,14 @@ enum WorkspaceError: Error, Equatable, LocalizedError {
 
 struct VirtualWorkspaceState: Equatable {
   let enabled: Bool
+  let mode: WorkspaceMode
+  let workspaceNames: [String]
+  let activeWorkspaceName: String
+  let previousWorkspaceName: String?
+  let displayStates: [WorkspaceDisplayRole: WorkspaceDisplayState]
+}
+
+struct WorkspaceDisplayState: Equatable {
   let workspaceNames: [String]
   let activeWorkspaceName: String
   let previousWorkspaceName: String?
@@ -110,7 +118,8 @@ protocol WorkspaceWindowDriver {
   @MainActor func setFrame(_ frame: CGRect, for window: ManagedWindowRef) -> Bool
   @MainActor func focus(_ window: ManagedWindowRef) -> Bool
   @MainActor func isWindowAlive(_ window: ManagedWindowRef) -> Bool
-  @MainActor func singleMonitorVisibleFrame() -> CGRect?
+  @MainActor func screenFrame(for role: WorkspaceDisplayRole) -> CGRect?
+  @MainActor func visibleFrame(for role: WorkspaceDisplayRole) -> CGRect?
 }
 
 @MainActor
@@ -228,9 +237,12 @@ final class LiveWorkspaceWindowDriver: WorkspaceWindowDriver {
     frame(for: window) != nil
   }
 
-  func singleMonitorVisibleFrame() -> CGRect? {
-    // Workspace currently manages only the primary display.
-    NSScreen.screens.first?.visibleFrame
+  func screenFrame(for role: WorkspaceDisplayRole) -> CGRect? {
+    screen(for: role)?.frame
+  }
+
+  func visibleFrame(for role: WorkspaceDisplayRole) -> CGRect? {
+    screen(for: role)?.visibleFrame
   }
 
   private func currentWindowNumbers(excludingPID excludedPID: pid_t) -> Set<Int> {
@@ -255,6 +267,17 @@ final class LiveWorkspaceWindowDriver: WorkspaceWindowDriver {
     }
 
     return numbers
+  }
+
+  private func screen(for role: WorkspaceDisplayRole) -> NSScreen? {
+    switch role {
+    case .primary:
+      return NSScreen.screens.first
+    case .secondary:
+      let screens = NSScreen.screens
+      guard screens.count >= 2 else { return nil }
+      return screens[1]
+    }
   }
 
   private func axWindows(for appElement: AXUIElement) -> [AXUIElement]? {
@@ -385,17 +408,21 @@ final class VirtualWorkspaceService {
   private let workspaceMappingStore: any WorkspaceMappingStore
 
   private(set) var enabled: Bool
+  private(set) var mode: WorkspaceMode
   private(set) var workspaceNames: [String]
   private(set) var activeWorkspaceName: String
   private(set) var previousWorkspaceName: String?
 
+  private var workspaceNamesByDisplay: [WorkspaceDisplayRole: [String]]
+  private var activeWorkspaceNamesByDisplay: [WorkspaceDisplayRole: String]
+  private var previousWorkspaceNamesByDisplay: [WorkspaceDisplayRole: String]
   private var workspaceWindows: [String: [ManagedWindowRef]]
   private var savedFrames: [WindowKey: CGRect] = [:]
   private var pendingPersistedWorkspaceWindowKeys: [String: [WindowKey]]
   private var pendingPersistedSavedFrames: [WindowKey: PersistedWindowFrame]
   private var lastPersistedWorkspaceSnapshot: WorkspaceMappingSnapshot?
-  private var lastFocusedManagedWindowKey: WindowKey?
-  private var lastFocusedManagedWindowWorkspaceName: String?
+  private var lastFocusedManagedWindowKeyByDisplay: [WorkspaceDisplayRole: WindowKey]
+  private var lastFocusedManagedWindowWorkspaceNameByDisplay: [WorkspaceDisplayRole: String]
 
   var onStateDidChange: ((VirtualWorkspaceState) -> Void)?
 
@@ -423,34 +450,60 @@ final class VirtualWorkspaceService {
     self.driver = driver
     self.workspaceMappingStore = workspaceMappingStore ?? FileWorkspaceMappingStore()
 
-    let normalizedWorkspaceNames = Self.normalizeWorkspaceNames(initialConfig.names)
     let persistedSnapshot = self.workspaceMappingStore.load()
-    let restoredActiveWorkspaceName = persistedSnapshot?.activeWorkspaceName
-      .flatMap { workspaceName in
-        normalizedWorkspaceNames.contains(workspaceName) ? workspaceName : nil
-      }
+
+    let normalizedWorkspaceNamesByDisplay = Self.normalizedWorkspaceNamesByDisplay(
+      from: initialConfig
+    )
+    let normalizedWorkspaceNames = Self.flattenWorkspaceNames(
+      from: normalizedWorkspaceNamesByDisplay
+    )
+
     self.enabled = initialConfig.enabled
+    self.mode = initialConfig.mode
+    self.workspaceNamesByDisplay = normalizedWorkspaceNamesByDisplay
     self.workspaceNames = normalizedWorkspaceNames
-    self.activeWorkspaceName = restoredActiveWorkspaceName
-      ?? normalizedWorkspaceNames.first
-      ?? WorkspaceConfig.defaultNames[0]
-    self.previousWorkspaceName = nil
     self.workspaceWindows = Dictionary(
       uniqueKeysWithValues: normalizedWorkspaceNames.map { ($0, []) }
     )
     self.pendingPersistedWorkspaceWindowKeys = persistedSnapshot?.workspaceWindows ?? [:]
     self.pendingPersistedSavedFrames = persistedSnapshot?.savedFrames ?? [:]
     self.lastPersistedWorkspaceSnapshot = nil
+    self.lastFocusedManagedWindowKeyByDisplay = [:]
+    self.lastFocusedManagedWindowWorkspaceNameByDisplay = [:]
+
+    var initialActiveWorkspaceNamesByDisplay: [WorkspaceDisplayRole: String] = [:]
+    for role in Self.managedDisplayRoles(
+      for: initialConfig.mode,
+      workspaceNamesByDisplay: normalizedWorkspaceNamesByDisplay
+    ) {
+      let names = normalizedWorkspaceNamesByDisplay[role, default: []]
+      guard let fallbackWorkspace = names.first else { continue }
+
+      let restoredWorkspace = persistedSnapshot?.activeWorkspaceNamesByDisplay[role.rawValue]
+      initialActiveWorkspaceNamesByDisplay[role] = restoredWorkspace.flatMap { workspaceName in
+        names.contains(workspaceName) ? workspaceName : nil
+      } ?? fallbackWorkspace
+    }
+    self.activeWorkspaceNamesByDisplay = initialActiveWorkspaceNamesByDisplay
+    self.previousWorkspaceNamesByDisplay = [:]
+    self.activeWorkspaceName = initialActiveWorkspaceNamesByDisplay[.primary]
+      ?? normalizedWorkspaceNamesByDisplay[.primary]?.first
+      ?? WorkspaceConfig.defaultNames[0]
+    self.previousWorkspaceName = nil
 
     restorePersistedWorkspaceMappingIfNeeded()
+    refreshCompatibilityState()
   }
 
   var state: VirtualWorkspaceState {
     VirtualWorkspaceState(
       enabled: enabled,
+      mode: mode,
       workspaceNames: workspaceNames,
       activeWorkspaceName: activeWorkspaceName,
-      previousWorkspaceName: previousWorkspaceName
+      previousWorkspaceName: previousWorkspaceName,
+      displayStates: displayStates
     )
   }
 
@@ -479,9 +532,15 @@ final class VirtualWorkspaceService {
   func apply(config: WorkspaceConfig) {
     let wasEnabled = enabled
 
-    let normalizedWorkspaceNames = Self.normalizeWorkspaceNames(config.names)
+    let oldWorkspaceNamesByDisplay = workspaceNamesByDisplay
+    let normalizedWorkspaceNamesByDisplay = Self.normalizedWorkspaceNamesByDisplay(from: config)
+    let normalizedWorkspaceNames = Self.flattenWorkspaceNames(from: normalizedWorkspaceNamesByDisplay)
+    let oldManagedDisplayRoles = managedDisplayRoles
+
+    workspaceNamesByDisplay = normalizedWorkspaceNamesByDisplay
     workspaceNames = normalizedWorkspaceNames
     enabled = config.enabled
+    mode = config.mode
 
     let fallbackWorkspace = normalizedWorkspaceNames.first ?? WorkspaceConfig.defaultNames[0]
 
@@ -489,27 +548,62 @@ final class VirtualWorkspaceService {
       Dictionary(uniqueKeysWithValues: normalizedWorkspaceNames.map { ($0, []) })
 
     for (workspaceName, windows) in workspaceWindows {
-      let targetWorkspaceName = normalizedWorkspaceNames.contains(workspaceName)
-        ? workspaceName
-        : fallbackWorkspace
+      let targetWorkspaceName = if normalizedWorkspaceNames.contains(workspaceName) {
+        workspaceName
+      } else if let role = Self.workspaceRole(
+        for: workspaceName,
+        in: oldWorkspaceNamesByDisplay
+      ) {
+        normalizedWorkspaceNamesByDisplay[role]?.first ?? fallbackWorkspace
+      } else {
+        fallbackWorkspace
+      }
       for window in windows {
         Self.appendUnique(window, to: &remappedWorkspaceWindows[targetWorkspaceName, default: []])
       }
     }
     workspaceWindows = remappedWorkspaceWindows
 
-    if !workspaceNames.contains(activeWorkspaceName) {
-      activeWorkspaceName = fallbackWorkspace
+    var remappedActiveWorkspaceNamesByDisplay: [WorkspaceDisplayRole: String] = [:]
+    for role in managedDisplayRoles {
+      let names = normalizedWorkspaceNamesByDisplay[role, default: []]
+      guard let fallbackForRole = names.first else { continue }
+
+      let currentActiveWorkspaceName = activeWorkspaceNamesByDisplay[role]
+      remappedActiveWorkspaceNamesByDisplay[role] = currentActiveWorkspaceName.flatMap { workspaceName in
+        names.contains(workspaceName) ? workspaceName : nil
+      } ?? fallbackForRole
     }
-    if let previousWorkspaceName, !workspaceNames.contains(previousWorkspaceName) {
-      self.previousWorkspaceName = nil
+    activeWorkspaceNamesByDisplay = remappedActiveWorkspaceNamesByDisplay
+
+    previousWorkspaceNamesByDisplay = previousWorkspaceNamesByDisplay.reduce(
+      into: [WorkspaceDisplayRole: String]()
+    ) { partialResult, entry in
+      let role = entry.key
+      let workspaceName = entry.value
+      let names = normalizedWorkspaceNamesByDisplay[role, default: []]
+      guard names.contains(workspaceName) else { return }
+      partialResult[role] = workspaceName
     }
-    if let lastFocusedManagedWindowWorkspaceName,
-      !workspaceNames.contains(lastFocusedManagedWindowWorkspaceName)
-    {
-      self.lastFocusedManagedWindowKey = nil
-      self.lastFocusedManagedWindowWorkspaceName = nil
+
+    lastFocusedManagedWindowKeyByDisplay = lastFocusedManagedWindowKeyByDisplay.filter {
+      managedDisplayRoles.contains($0.key)
     }
+    lastFocusedManagedWindowWorkspaceNameByDisplay = lastFocusedManagedWindowWorkspaceNameByDisplay.reduce(
+      into: [WorkspaceDisplayRole: String]()
+    ) { partialResult, entry in
+      let role = entry.key
+      let workspaceName = entry.value
+      let names = normalizedWorkspaceNamesByDisplay[role, default: []]
+      guard names.contains(workspaceName) else { return }
+      partialResult[role] = workspaceName
+    }
+
+    for role in oldManagedDisplayRoles where !managedDisplayRoles.contains(role) {
+      clearLastFocusedManagedWindow(on: role)
+    }
+
+    refreshCompatibilityState()
 
     synchronizeManageableWindowsToActiveWorkspace()
     pruneDeadWindows()
@@ -525,57 +619,59 @@ final class VirtualWorkspaceService {
 
   func synchronizeActiveWorkspaceToFocusedWindowIfNeeded() {
     guard enabled else { return }
-    guard workspaceNames.contains(activeWorkspaceName) else { return }
+    guard !workspaceNames.isEmpty else { return }
     guard driver.isAccessibilityGranted() else { return }
 
     synchronizeManageableWindowsToActiveWorkspace()
     pruneDeadWindows()
 
-    let activeWorkspaceHasLiveWindows = hasLiveManagedWindow(in: activeWorkspaceName)
-    let lastFocusedWindowClosedInActiveWorkspace =
-      lastFocusedManagedWindowWorkspaceName == activeWorkspaceName
-      && lastFocusedManagedWindowKey != nil
-      && workspaceName(for: lastFocusedManagedWindowKey!) == nil
-
     guard let focusedWindow = driver.resolveFocusedWindow(
       preferredWindow: nil,
       allowFallbackWindow: false
     ) else {
-      if !activeWorkspaceHasLiveWindows {
-        clearLastFocusedManagedWindow()
-        return
-      }
-      if lastFocusedWindowClosedInActiveWorkspace {
-        restoreFocusAfterClosedWindowIfPossible()
-      }
+      restoreFocusForClosedManagedWindowIfNeeded()
       return
     }
     if isSpecialWindow(focusedWindow) {
       return
     }
-    guard isOnPrimaryMonitor(focusedWindow) else {
+
+    guard let displayRole = displayRole(for: focusedWindow) else {
       return
     }
+    guard let activeWorkspaceName = activeWorkspaceName(for: displayRole) else { return }
+
+    let activeWorkspaceHasLiveWindows = hasLiveManagedWindow(in: activeWorkspaceName)
+    let lastFocusedWindowClosedInActiveWorkspace = {
+      guard let lastFocusedWorkspaceName = lastFocusedManagedWindowWorkspaceNameByDisplay[displayRole],
+        let lastFocusedKey = lastFocusedManagedWindowKeyByDisplay[displayRole]
+      else {
+        return false
+      }
+
+      return lastFocusedWorkspaceName == activeWorkspaceName
+        && workspaceName(for: lastFocusedKey) == nil
+    }()
 
     guard let focusedWindowWorkspace = workspaceName(for: focusedWindow.key) else {
       return
     }
     if focusedWindowWorkspace == activeWorkspaceName {
-      recordFocusedWindow(focusedWindow, in: focusedWindowWorkspace)
+      recordFocusedWindow(focusedWindow, in: focusedWindowWorkspace, on: displayRole)
       return
     }
 
     if !activeWorkspaceHasLiveWindows {
-      clearLastFocusedManagedWindow()
+      clearLastFocusedManagedWindow(on: displayRole)
       return
     }
 
     if lastFocusedWindowClosedInActiveWorkspace {
-      restoreFocusAfterClosedWindowIfPossible()
+      restoreFocusAfterClosedWindowIfPossible(on: displayRole)
       return
     }
 
-    recordFocusedWindow(focusedWindow, in: focusedWindowWorkspace)
+    recordFocusedWindow(focusedWindow, in: focusedWindowWorkspace, on: displayRole)
 
     _ = focusWorkspace(
       focusedWindowWorkspace,
@@ -585,19 +681,13 @@ final class VirtualWorkspaceService {
 
   func handleObservedWindowDestroyed() {
     guard enabled else { return }
-    guard workspaceNames.contains(activeWorkspaceName) else { return }
+    guard !workspaceNames.isEmpty else { return }
     guard driver.isAccessibilityGranted() else { return }
 
     synchronizeManageableWindowsToActiveWorkspace()
     pruneDeadWindows()
 
-    guard let lastFocusedManagedWindowKey else {
-      return
-    }
-    guard lastFocusedManagedWindowWorkspaceName == activeWorkspaceName else { return }
-    guard workspaceName(for: lastFocusedManagedWindowKey) == nil else { return }
-
-    restoreFocusAfterClosedWindowIfPossible()
+    restoreFocusForClosedManagedWindowIfNeeded()
   }
 
   func focusWorkspace(
@@ -607,16 +697,20 @@ final class VirtualWorkspaceService {
     guard enabled else { return .failure(.workspaceDisabled) }
     guard workspaceNames.contains(workspaceName) else { return .failure(.invalidWorkspace) }
     guard driver.isAccessibilityGranted() else { return .failure(.permissionDenied) }
+    guard let displayRole = workspaceRole(for: workspaceName),
+      let currentWorkspace = activeWorkspaceName(for: displayRole)
+    else {
+      return .failure(.invalidWorkspace)
+    }
 
     synchronizeManageableWindowsToActiveWorkspace()
     pruneDeadWindows()
 
-    guard workspaceName != activeWorkspaceName else {
+    guard workspaceName != currentWorkspace else {
       persistWorkspaceSnapshotIfNeeded()
       return .success(())
     }
 
-    let currentWorkspace = activeWorkspaceName
     var hasApplyFailure = false
 
     for window in workspaceWindows[currentWorkspace, default: []] {
@@ -631,8 +725,9 @@ final class VirtualWorkspaceService {
       }
     }
 
-    previousWorkspaceName = currentWorkspace
-    activeWorkspaceName = workspaceName
+    previousWorkspaceNamesByDisplay[displayRole] = currentWorkspace
+    activeWorkspaceNamesByDisplay[displayRole] = workspaceName
+    refreshCompatibilityState()
     if !preserveFocusedWindow {
       focusPreferredWindow(in: workspaceName)
     }
@@ -642,7 +737,8 @@ final class VirtualWorkspaceService {
   }
 
   func focusPreviousWorkspace() -> Result<Void, WorkspaceError> {
-    guard let previousWorkspaceName,
+    let targetRole = targetDisplayRoleForWorkspaceCommands()
+    guard let previousWorkspaceName = previousWorkspaceNamesByDisplay[targetRole],
       workspaceNames.contains(previousWorkspaceName)
     else {
       return .success(())
@@ -674,17 +770,20 @@ final class VirtualWorkspaceService {
       notifyStateDidChange()
       return .success(())
     }
-    if !isOnPrimaryMonitor(focusedWindow) {
+    guard let displayRole = displayRole(for: focusedWindow) else {
       removeWindowFromAllWorkspaces(focusedWindow)
       savedFrames.removeValue(forKey: focusedWindow.key)
       notifyStateDidChange()
       return .success(())
     }
+    guard workspaceRole(for: workspaceName) == displayRole else {
+      return .failure(.invalidWorkspace)
+    }
 
     removeWindowFromAllWorkspaces(focusedWindow)
     Self.appendUnique(focusedWindow, to: &workspaceWindows[workspaceName, default: []])
 
-    let didApply = if workspaceName == activeWorkspaceName {
+    let didApply = if workspaceName == activeWorkspaceName(for: displayRole) {
       unhide(focusedWindow)
     } else {
       hide(focusedWindow)
@@ -697,18 +796,19 @@ final class VirtualWorkspaceService {
   func restoreAllWindows() {
     pruneDeadWindows()
 
-    let visibleFrame = primaryDisplayVisibleFrame
     let windows = allManagedWindows
 
     for window in windows {
       guard let savedFrame = savedFrames[window.key] else { continue }
+      let displayRole = displayRole(for: window)
 
       if driver.setFrame(savedFrame, for: window) {
         savedFrames.removeValue(forKey: window.key)
         continue
       }
 
-      guard let visibleFrame,
+      guard let displayRole,
+        let visibleFrame = visibleFrame(for: displayRole),
         let currentFrame = driver.frame(for: window)
       else {
         continue
@@ -757,7 +857,7 @@ final class VirtualWorkspaceService {
 
   private var workspaceMappingSnapshot: WorkspaceMappingSnapshot {
     WorkspaceMappingSnapshot(
-      activeWorkspaceName: activeWorkspaceName,
+      activeWorkspaceNamesByDisplay: persistedActiveWorkspaceNamesByDisplay,
       workspaceWindows: workspaceWindowKeysMapping,
       savedFrames: persistedSavedFrames
     )
@@ -776,21 +876,17 @@ final class VirtualWorkspaceService {
     return orderedWindows
   }
 
-  private var primaryDisplayVisibleFrame: CGRect? {
-    driver.singleMonitorVisibleFrame()
-  }
-
-  private var manageableWindowsOnPrimaryMonitor: [ManagedWindowRef] {
-    driver.allManageableWindows().filter { window in
-      !isSpecialWindow(window) && isOnPrimaryMonitor(window)
-    }
-  }
-
   private func reconcileVisibility() -> Bool {
     var success = true
     for workspaceName in workspaceNames {
       let windows = workspaceWindows[workspaceName, default: []]
-      if workspaceName == activeWorkspaceName {
+      let isActiveWorkspace = if let displayRole = workspaceRole(for: workspaceName) {
+        workspaceName == activeWorkspaceName(for: displayRole)
+      } else {
+        false
+      }
+
+      if isActiveWorkspace {
         for window in windows where !unhide(window) {
           success = false
         }
@@ -807,7 +903,9 @@ final class VirtualWorkspaceService {
     guard let currentFrame = driver.frame(for: window) else {
       return false
     }
-    guard let visibleFrame = primaryDisplayVisibleFrame else {
+    guard let displayRole = displayRole(for: window),
+      let visibleFrame = visibleFrame(for: displayRole)
+    else {
       return false
     }
 
@@ -833,7 +931,7 @@ final class VirtualWorkspaceService {
   }
 
   private func pruneDeadWindows() {
-    let liveWindows = manageableWindowsOnPrimaryMonitor
+    let liveWindows = manageableWindowsOnManagedDisplays
     let liveWindowsByKey = Dictionary(uniqueKeysWithValues: liveWindows.map { ($0.key, $0) })
 
     for workspaceName in workspaceNames {
@@ -863,24 +961,30 @@ final class VirtualWorkspaceService {
       return
     }
     guard enabled else { return }
-    guard workspaceNames.contains(activeWorkspaceName) else { return }
+    guard !workspaceNames.isEmpty else { return }
     guard driver.isAccessibilityGranted() else { return }
 
     var restoredWorkspaceWindows: [String: [ManagedWindowRef]] =
       Dictionary(uniqueKeysWithValues: workspaceNames.map { ($0, []) })
-    let liveWindows = manageableWindowsOnPrimaryMonitor
+    let liveWindows = manageableWindowsOnManagedDisplays
     let liveWindowsByKey = Dictionary(uniqueKeysWithValues: liveWindows.map { ($0.key, $0) })
     var assignedWindowKeys: Set<WindowKey> = []
 
     for workspaceName in workspaceNames {
       for key in pendingPersistedWorkspaceWindowKeys[workspaceName, default: []] {
         guard let window = liveWindowsByKey[key] else { continue }
+        guard workspaceRole(for: workspaceName) == displayRole(for: window) else { continue }
         guard assignedWindowKeys.insert(key).inserted else { continue }
         Self.appendUnique(window, to: &restoredWorkspaceWindows[workspaceName, default: []])
       }
     }
 
     for window in liveWindows where !assignedWindowKeys.contains(window.key) {
+      guard let displayRole = displayRole(for: window),
+        let activeWorkspaceName = activeWorkspaceName(for: displayRole)
+      else {
+        continue
+      }
       Self.appendUnique(window, to: &restoredWorkspaceWindows[activeWorkspaceName, default: []])
     }
 
@@ -888,7 +992,12 @@ final class VirtualWorkspaceService {
     savedFrames = pendingPersistedSavedFrames.reduce(into: [WindowKey: CGRect]()) { partialResult, entry in
       let windowKey = entry.key
       guard liveWindowsByKey[windowKey] != nil else { return }
-      guard let workspaceName = workspaceName(for: windowKey) else { return }
+      guard let workspaceName = workspaceName(for: windowKey),
+        let displayRole = workspaceRole(for: workspaceName),
+        let activeWorkspaceName = activeWorkspaceName(for: displayRole)
+      else {
+        return
+      }
       guard workspaceName != activeWorkspaceName else { return }
 
       partialResult[windowKey] = entry.value.rect
@@ -911,13 +1020,17 @@ final class VirtualWorkspaceService {
     restorePersistedWorkspaceMappingIfNeeded()
 
     guard enabled else { return }
-    guard workspaceNames.contains(activeWorkspaceName) else { return }
+    guard !workspaceNames.isEmpty else { return }
     guard driver.isAccessibilityGranted() else { return }
 
     let knownKeys = Set(allManagedWindows.map(\.key))
-    for window in manageableWindowsOnPrimaryMonitor
-    where !knownKeys.contains(window.key)
-    {
+    for window in manageableWindowsOnManagedDisplays where !knownKeys.contains(window.key) {
+      guard let displayRole = displayRole(for: window),
+        let activeWorkspaceName = activeWorkspaceName(for: displayRole)
+      else {
+        continue
+      }
+
       Self.appendUnique(window, to: &workspaceWindows[activeWorkspaceName, default: []])
     }
   }
@@ -930,8 +1043,9 @@ final class VirtualWorkspaceService {
   private func focusTopmostWindow(in workspaceName: String) -> ManagedWindowRef? {
     let windows = workspaceWindows[workspaceName, default: []]
     for window in windows.reversed() where !isSpecialWindow(window) && driver.isWindowAlive(window) {
+      guard let displayRole = workspaceRole(for: workspaceName) else { continue }
       if driver.focus(window) {
-        recordFocusedWindow(window, in: workspaceName)
+        recordFocusedWindow(window, in: workspaceName, on: displayRole)
         return window
       }
     }
@@ -939,20 +1053,24 @@ final class VirtualWorkspaceService {
     return nil
   }
 
-  private func restoreFocusAfterClosedWindowIfPossible() {
+  private func restoreFocusAfterClosedWindowIfPossible(on displayRole: WorkspaceDisplayRole) {
+    guard let activeWorkspaceName = activeWorkspaceName(for: displayRole) else {
+      clearLastFocusedManagedWindow(on: displayRole)
+      return
+    }
     guard hasLiveManagedWindow(in: activeWorkspaceName) else {
-      clearLastFocusedManagedWindow()
+      clearLastFocusedManagedWindow(on: displayRole)
       return
     }
 
     guard let topmostWindow = topmostManagedWindow(in: activeWorkspaceName) else {
-      clearLastFocusedManagedWindow()
+      clearLastFocusedManagedWindow(on: displayRole)
       return
     }
 
     if focusTopmostWindow(in: activeWorkspaceName) == nil {
-      lastFocusedManagedWindowKey = topmostWindow.key
-      lastFocusedManagedWindowWorkspaceName = activeWorkspaceName
+      lastFocusedManagedWindowKeyByDisplay[displayRole] = topmostWindow.key
+      lastFocusedManagedWindowWorkspaceNameByDisplay[displayRole] = activeWorkspaceName
     }
   }
 
@@ -970,11 +1088,12 @@ final class VirtualWorkspaceService {
 
   private func recordFocusedWindow(
     _ window: ManagedWindowRef,
-    in workspaceName: String
+    in workspaceName: String,
+    on displayRole: WorkspaceDisplayRole
   ) {
     promoteWindowToTopmost(window, in: workspaceName)
-    lastFocusedManagedWindowKey = window.key
-    lastFocusedManagedWindowWorkspaceName = workspaceName
+    lastFocusedManagedWindowKeyByDisplay[displayRole] = window.key
+    lastFocusedManagedWindowWorkspaceNameByDisplay[displayRole] = workspaceName
   }
 
   private func promoteWindowToTopmost(
@@ -987,23 +1106,9 @@ final class VirtualWorkspaceService {
     workspaceWindows[workspaceName] = windows
   }
 
-  private func clearLastFocusedManagedWindow() {
-    lastFocusedManagedWindowKey = nil
-    lastFocusedManagedWindowWorkspaceName = nil
-  }
-
-  private func isOnPrimaryMonitor(_ window: ManagedWindowRef) -> Bool {
-    guard let primaryDisplayVisibleFrame else {
-      return true
-    }
-
-    let frame = savedFrames[window.key] ?? driver.frame(for: window)
-    guard let frame, !frame.isNull else {
-      return false
-    }
-
-    let center = CGPoint(x: frame.midX, y: frame.midY)
-    return primaryDisplayVisibleFrame.contains(center)
+  private func clearLastFocusedManagedWindow(on displayRole: WorkspaceDisplayRole) {
+    lastFocusedManagedWindowKeyByDisplay.removeValue(forKey: displayRole)
+    lastFocusedManagedWindowWorkspaceNameByDisplay.removeValue(forKey: displayRole)
   }
 
   private func isSpecialWindow(_ window: ManagedWindowRef) -> Bool {
@@ -1031,6 +1136,7 @@ final class VirtualWorkspaceService {
   }
 
   private func notifyStateDidChange() {
+    refreshCompatibilityState()
     persistWorkspaceSnapshotIfNeeded()
     onStateDidChange?(state)
   }
@@ -1040,7 +1146,196 @@ final class VirtualWorkspaceService {
     windows.append(window)
   }
 
-  private static func normalizeWorkspaceNames(_ names: [String]) -> [String] {
+  private func activeWorkspaceName(for displayRole: WorkspaceDisplayRole) -> String? {
+    activeWorkspaceNamesByDisplay[displayRole]
+  }
+
+  private func visibleFrame(for displayRole: WorkspaceDisplayRole) -> CGRect? {
+    driver.visibleFrame(for: displayRole)
+  }
+
+  private func screenFrame(for displayRole: WorkspaceDisplayRole) -> CGRect? {
+    driver.screenFrame(for: displayRole)
+  }
+
+  private var managedDisplayRoles: [WorkspaceDisplayRole] {
+    Self.managedDisplayRoles(
+      for: mode,
+      workspaceNamesByDisplay: workspaceNamesByDisplay
+    )
+  }
+
+  private var displayStates: [WorkspaceDisplayRole: WorkspaceDisplayState] {
+    managedDisplayRoles.reduce(into: [WorkspaceDisplayRole: WorkspaceDisplayState]()) {
+      partialResult,
+      displayRole in
+
+      guard let activeWorkspaceName = activeWorkspaceName(for: displayRole) else {
+        return
+      }
+
+      partialResult[displayRole] = WorkspaceDisplayState(
+        workspaceNames: workspaceNamesByDisplay[displayRole, default: []],
+        activeWorkspaceName: activeWorkspaceName,
+        previousWorkspaceName: previousWorkspaceNamesByDisplay[displayRole]
+      )
+    }
+  }
+
+  private var manageableWindowsOnManagedDisplays: [ManagedWindowRef] {
+    driver.allManageableWindows().filter { window in
+      !isSpecialWindow(window) && displayRole(for: window) != nil
+    }
+  }
+
+  private var persistedActiveWorkspaceNamesByDisplay: [String: String] {
+    activeWorkspaceNamesByDisplay.reduce(into: [String: String]()) { partialResult, entry in
+      partialResult[entry.key.rawValue] = entry.value
+    }
+  }
+
+  private func workspaceRole(for workspaceName: String) -> WorkspaceDisplayRole? {
+    Self.workspaceRole(for: workspaceName, in: workspaceNamesByDisplay)
+  }
+
+  private func displayRole(for window: ManagedWindowRef) -> WorkspaceDisplayRole? {
+    let frame = savedFrames[window.key] ?? driver.frame(for: window)
+    guard let frame, !frame.isNull else {
+      return nil
+    }
+
+    return displayRole(for: frame)
+  }
+
+  private func displayRole(for frame: CGRect) -> WorkspaceDisplayRole? {
+    var bestRole: WorkspaceDisplayRole?
+    var bestIntersectionArea: CGFloat = 0
+
+    for displayRole in managedDisplayRoles {
+      guard let screenFrame = screenFrame(for: displayRole) else { continue }
+
+      let intersectionArea = frame.intersection(screenFrame).area
+      if intersectionArea > bestIntersectionArea {
+        bestIntersectionArea = intersectionArea
+        bestRole = displayRole
+      }
+    }
+
+    if let bestRole {
+      return bestRole
+    }
+
+    let center = CGPoint(x: frame.midX, y: frame.midY)
+    for displayRole in managedDisplayRoles {
+      guard let screenFrame = screenFrame(for: displayRole) else { continue }
+      if screenFrame.contains(center) {
+        return displayRole
+      }
+    }
+
+    return nil
+  }
+
+  private func targetDisplayRoleForWorkspaceCommands() -> WorkspaceDisplayRole {
+    guard mode == .perDisplay else {
+      return .primary
+    }
+
+    guard let focusedWindow = driver.resolveFocusedWindow(
+      preferredWindow: nil,
+      allowFallbackWindow: true
+    ),
+      let displayRole = displayRole(for: focusedWindow),
+      previousWorkspaceNamesByDisplay[displayRole] != nil
+    else {
+      return .primary
+    }
+
+    return displayRole
+  }
+
+  private func restoreFocusForClosedManagedWindowIfNeeded() {
+    for displayRole in managedDisplayRoles {
+      guard let activeWorkspaceName = activeWorkspaceName(for: displayRole),
+        let lastFocusedWindowKey = lastFocusedManagedWindowKeyByDisplay[displayRole],
+        lastFocusedManagedWindowWorkspaceNameByDisplay[displayRole] == activeWorkspaceName,
+        workspaceName(for: lastFocusedWindowKey) == nil
+      else {
+        continue
+      }
+
+      restoreFocusAfterClosedWindowIfPossible(on: displayRole)
+    }
+  }
+
+  private func refreshCompatibilityState() {
+    let primaryWorkspaceNames = workspaceNamesByDisplay[.primary, default: []]
+    activeWorkspaceName = activeWorkspaceNamesByDisplay[.primary]
+      ?? primaryWorkspaceNames.first
+      ?? workspaceNames.first
+      ?? WorkspaceConfig.defaultNames[0]
+    previousWorkspaceName = previousWorkspaceNamesByDisplay[.primary]
+  }
+
+  private static func managedDisplayRoles(
+    for mode: WorkspaceMode,
+    workspaceNamesByDisplay: [WorkspaceDisplayRole: [String]]
+  ) -> [WorkspaceDisplayRole] {
+    switch mode {
+    case .primaryOnly, .unified:
+      return workspaceNamesByDisplay[.primary, default: []].isEmpty ? [] : [.primary]
+    case .perDisplay:
+      return WorkspaceDisplayRole.allCases.filter { !workspaceNamesByDisplay[$0, default: []].isEmpty }
+    }
+  }
+
+  private static func normalizedWorkspaceNamesByDisplay(
+    from config: WorkspaceConfig
+  ) -> [WorkspaceDisplayRole: [String]] {
+    let primaryNames = normalizeWorkspaceNames(
+      config.primaryNames,
+      fallback: WorkspaceConfig.defaultNames
+    )
+
+    switch config.mode {
+    case .primaryOnly, .unified:
+      return [
+        .primary: primaryNames,
+        .secondary: [],
+      ]
+    case .perDisplay:
+      return [
+        .primary: primaryNames,
+        .secondary: normalizeWorkspaceNames(
+          config.secondaryNames,
+          fallback: WorkspaceConfig.defaultSecondaryNames
+        ),
+      ]
+    }
+  }
+
+  private static func flattenWorkspaceNames(
+    from workspaceNamesByDisplay: [WorkspaceDisplayRole: [String]]
+  ) -> [String] {
+    var flattened: [String] = []
+
+    for displayRole in WorkspaceDisplayRole.allCases {
+      flattened.append(contentsOf: workspaceNamesByDisplay[displayRole, default: []])
+    }
+
+    return flattened
+  }
+
+  private static func workspaceRole(
+    for workspaceName: String,
+    in workspaceNamesByDisplay: [WorkspaceDisplayRole: [String]]
+  ) -> WorkspaceDisplayRole? {
+    WorkspaceDisplayRole.allCases.first { displayRole in
+      workspaceNamesByDisplay[displayRole, default: []].contains(workspaceName)
+    }
+  }
+
+  private static func normalizeWorkspaceNames(_ names: [String], fallback: [String]) -> [String] {
     var normalized: [String] = []
     var seen: Set<String> = []
 
@@ -1051,7 +1346,7 @@ final class VirtualWorkspaceService {
       normalized.append(trimmedName)
     }
 
-    return normalized.isEmpty ? WorkspaceConfig.defaultNames : normalized
+    return normalized.isEmpty ? fallback : normalized
   }
 
   private static func hiddenFrame(for frame: CGRect, in visibleFrame: CGRect) -> CGRect {
@@ -1083,5 +1378,12 @@ final class VirtualWorkspaceService {
       width: width,
       height: height
     )
+  }
+}
+
+private extension CGRect {
+  var area: CGFloat {
+    guard !isNull, !isEmpty else { return 0 }
+    return width * height
   }
 }

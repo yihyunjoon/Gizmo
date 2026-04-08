@@ -29,6 +29,7 @@ struct AppBootstrap {
     let windowManagerService = WindowManagerService(
       permissionService: accessibilityPermissionService,
       customMenubarConfigProvider: { configStore.active.customMenubar },
+      workspaceConfigProvider: { configStore.active.workspace },
       gapsConfigProvider: { configStore.active.gaps },
       fallbackWindowElementProvider: {
         workspaceFocusObserverService.preferredWindowElement()
@@ -59,10 +60,7 @@ struct AppBootstrap {
 
     virtualWorkspaceService.onStateDidChange = {
       [weak customMenubarRuntimeService, weak launcherPanelService, weak commandShortcutService] state in
-      customMenubarRuntimeService?.updateWorkspaceState(
-        names: state.workspaceNames,
-        focusedWorkspaceName: state.activeWorkspaceName
-      )
+      customMenubarRuntimeService?.updateWorkspaceState(state)
       commandShortcutService?.updateWorkspaceCommands(workspaceNames: state.workspaceNames)
       launcherPanelService?.refreshCommandList()
     }
@@ -104,10 +102,7 @@ struct AppBootstrap {
       virtualWorkspaceService.apply(config: config.workspace)
     }
     customMenubarRuntimeService.apply(config: configStore.active.customMenubar)
-    customMenubarRuntimeService.updateWorkspaceState(
-      names: virtualWorkspaceService.state.workspaceNames,
-      focusedWorkspaceName: virtualWorkspaceService.state.activeWorkspaceName
-    )
+    customMenubarRuntimeService.updateWorkspaceState(virtualWorkspaceService.state)
     launcherPanelService.refreshCommandList()
     launcherPanelService.preloadPanel()
     launcherAppCatalogService.refreshInBackground()

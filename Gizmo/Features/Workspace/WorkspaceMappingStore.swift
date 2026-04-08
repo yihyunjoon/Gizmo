@@ -34,28 +34,29 @@ struct PersistedWindowFrame: Codable, Equatable {
 }
 
 struct WorkspaceMappingSnapshot: Codable, Equatable {
-  static let currentVersion = 1
+  static let currentVersion = 2
 
   var version: Int
-  var activeWorkspaceName: String?
+  var activeWorkspaceNamesByDisplay: [String: String]
   var workspaceWindows: [String: [WindowKey]]
   var savedFrames: [WindowKey: PersistedWindowFrame]
 
   private enum CodingKeys: String, CodingKey {
     case version
     case activeWorkspaceName
+    case activeWorkspaceNamesByDisplay
     case workspaceWindows
     case savedFrames
   }
 
   init(
     version: Int = currentVersion,
-    activeWorkspaceName: String? = nil,
+    activeWorkspaceNamesByDisplay: [String: String] = [:],
     workspaceWindows: [String: [WindowKey]],
     savedFrames: [WindowKey: PersistedWindowFrame] = [:]
   ) {
     self.version = version
-    self.activeWorkspaceName = activeWorkspaceName
+    self.activeWorkspaceNamesByDisplay = activeWorkspaceNamesByDisplay
     self.workspaceWindows = workspaceWindows
     self.savedFrames = savedFrames
   }
@@ -63,10 +64,6 @@ struct WorkspaceMappingSnapshot: Codable, Equatable {
   init(from decoder: any Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     version = try container.decode(Int.self, forKey: .version)
-    activeWorkspaceName = try container.decodeIfPresent(
-      String.self,
-      forKey: .activeWorkspaceName
-    )
     workspaceWindows = try container.decode(
       [String: [WindowKey]].self,
       forKey: .workspaceWindows
@@ -75,6 +72,31 @@ struct WorkspaceMappingSnapshot: Codable, Equatable {
       [WindowKey: PersistedWindowFrame].self,
       forKey: .savedFrames
     ) ?? [:]
+
+    if version == 1 {
+      let primaryActiveWorkspaceName = try container.decodeIfPresent(
+        String.self,
+        forKey: .activeWorkspaceName
+      )
+      activeWorkspaceNamesByDisplay = primaryActiveWorkspaceName.map {
+        [WorkspaceDisplayRole.primary.rawValue: $0]
+      } ?? [:]
+      version = Self.currentVersion
+      return
+    }
+
+    activeWorkspaceNamesByDisplay = try container.decodeIfPresent(
+      [String: String].self,
+      forKey: .activeWorkspaceNamesByDisplay
+    ) ?? [:]
+  }
+
+  func encode(to encoder: any Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(version, forKey: .version)
+    try container.encode(activeWorkspaceNamesByDisplay, forKey: .activeWorkspaceNamesByDisplay)
+    try container.encode(workspaceWindows, forKey: .workspaceWindows)
+    try container.encode(savedFrames, forKey: .savedFrames)
   }
 }
 

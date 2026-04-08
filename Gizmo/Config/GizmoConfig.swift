@@ -23,16 +23,52 @@ struct GizmoConfig: Equatable {
 
 struct WorkspaceConfig: Equatable {
   var enabled: Bool
-  var names: [String]
+  var mode: WorkspaceMode
+  var primaryNames: [String]
+  var secondaryNames: [String]
   var hideStrategy: WorkspaceHideStrategy
 
   static let defaultNames: [String] = ["q", "w", "e", "r", "t"]
+  static let defaultSecondaryNames: [String] = ["3", "4"]
 
   static let `default` = WorkspaceConfig(
     enabled: true,
-    names: defaultNames,
+    mode: .primaryOnly,
+    primaryNames: defaultNames,
+    secondaryNames: defaultSecondaryNames,
     hideStrategy: .cornerOffscreen
   )
+
+  var commandWorkspaceNames: [String] {
+    var ordered: [String] = []
+    var seen: Set<String> = []
+
+    for name in primaryNames + secondaryNames where seen.insert(name).inserted {
+      ordered.append(name)
+    }
+
+    return ordered
+  }
+
+  func names(for role: WorkspaceDisplayRole) -> [String] {
+    switch role {
+    case .primary:
+      return primaryNames
+    case .secondary:
+      return secondaryNames
+    }
+  }
+}
+
+enum WorkspaceMode: String, CaseIterable, Equatable {
+  case primaryOnly = "primary_only"
+  case perDisplay = "per_display"
+  case unified
+}
+
+enum WorkspaceDisplayRole: String, CaseIterable, Equatable, Hashable, Codable {
+  case primary
+  case secondary
 }
 
 enum WorkspaceHideStrategy: String, CaseIterable, Equatable {

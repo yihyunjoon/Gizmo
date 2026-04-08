@@ -6,14 +6,28 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
   private let logger = Logger(subsystem: "com.yihyunjoon.Gizmo", category: "CustomMenubar")
 
   private var spaceManager: SkyLightSpaceManager?
-  private var windows: [String: CustomMenubarWindowController] = [:]
-  private var skylightAttachedScreenIDs: Set<String> = []
+  private var windows: [WorkspaceDisplayRole: CustomMenubarWindowController] = [:]
+  private var skylightAttachedDisplayRoles: Set<WorkspaceDisplayRole> = []
 
   private var screenObserver: NSObjectProtocol?
   private var activeSpaceObserver: NSObjectProtocol?
 
-  private let model = CustomMenubarModel()
+  private var modelsByDisplayRole: [WorkspaceDisplayRole: CustomMenubarModel] = [:]
   private var onWorkspaceSelection: ((String) -> Void)?
+  private var workspaceState = VirtualWorkspaceState(
+    enabled: WorkspaceConfig.default.enabled,
+    mode: .primaryOnly,
+    workspaceNames: WorkspaceConfig.default.primaryNames,
+    activeWorkspaceName: WorkspaceConfig.default.primaryNames.first ?? WorkspaceConfig.defaultNames[0],
+    previousWorkspaceName: nil,
+    displayStates: [
+      .primary: WorkspaceDisplayState(
+        workspaceNames: WorkspaceConfig.default.primaryNames,
+        activeWorkspaceName: WorkspaceConfig.default.primaryNames.first ?? WorkspaceConfig.defaultNames[0],
+        previousWorkspaceName: nil
+      )
+    ]
+  )
 
   private(set) var isRunning = false
   private(set) var config: CustomMenubarConfig = .default
@@ -26,7 +40,7 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
     guard !isRunning else { return }
 
     isRunning = true
-    model.start()
+    reconcileModels()
     observeScreenChangesIfNeeded()
     observeSpaceChangesIfNeeded()
     reconcileWindows()
@@ -38,14 +52,17 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
     isRunning = false
     removeObservers()
     tearDownWindows()
-    model.stop()
+    tearDownModels()
   }
 
   func apply(config: CustomMenubarConfig) {
     self.config = config
-    model.apply(config: config)
+    for model in modelsByDisplayRole.values {
+      model.apply(config: config)
+    }
 
     guard isRunning else { return }
+    reconcileModels()
     reconcileWindows()
   }
 
@@ -61,14 +78,12 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
     reconcileWindows()
   }
 
-  func updateWorkspaceState(
-    names: [String],
-    focusedWorkspaceName: String
-  ) {
-    model.updateWorkspaceState(
-      names: names,
-      focusedWorkspaceName: focusedWorkspaceName
-    )
+  func updateWorkspaceState(_ state: VirtualWorkspaceState) {
+    workspaceState = state
+    reconcileModels()
+
+    guard isRunning else { return }
+    reconcileWindows()
   }
 
   private func observeScreenChangesIfNeeded() {
@@ -117,37 +132,42 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
 
     let hasSkyLight = ensureSpaceManager()
     if !hasSkyLight {
-      skylightAttachedScreenIDs.removeAll()
+      skylightAttachedDisplayRoles.removeAll()
     }
 
-    let targetScreens = resolvedScreens(scope: config.displayScope)
-    guard !targetScreens.isEmpty else {
+    let targets = resolvedDisplayTargets()
+    guard !targets.isEmpty else {
       tearDownWindows()
       return
     }
 
-    let targetIDs = Set(targetScreens.map(screenIdentifier(_:)))
+    let targetRoles = Set(targets.map(\.role))
 
-    for (id, controller) in windows where !targetIDs.contains(id) {
+    for (role, controller) in windows where !targetRoles.contains(role) {
       controller.close()
-      windows.removeValue(forKey: id)
-      skylightAttachedScreenIDs.remove(id)
+      windows.removeValue(forKey: role)
+      skylightAttachedDisplayRoles.remove(role)
     }
 
-    for screen in targetScreens {
-      let id = screenIdentifier(screen)
+    for target in targets {
+      let role = target.role
+      let screen = target.screen
 
-      if let controller = windows[id] {
+      guard let model = model(for: role) else {
+        continue
+      }
+
+      if let controller = windows[role] {
         controller.update(
           screen: screen,
           model: model,
           config: config,
           onWorkspaceTap: workspaceTapHandler()
         )
-        if hasSkyLight, !skylightAttachedScreenIDs.contains(id), let window = controller.window {
-          attachWindowToSkyLight(window, screenID: id, attemptsRemaining: 8)
+        if hasSkyLight, !skylightAttachedDisplayRoles.contains(role), let window = controller.window {
+          attachWindowToSkyLight(window, role: role, attemptsRemaining: 8)
         }
-        if shouldHideInFullscreen(for: screen, screenID: id) {
+        if shouldHideInFullscreen(for: screen, role: role) {
           controller.hide()
         } else {
           controller.show()
@@ -162,20 +182,20 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
         onWorkspaceTap: workspaceTapHandler()
       )
 
-      windows[id] = controller
+      windows[role] = controller
 
       guard let window = controller.window else {
-        logger.error("Failed to resolve NSWindow for screen id=\(id, privacy: .public)")
+        logger.error("Failed to resolve NSWindow for display role=\(role.rawValue, privacy: .public)")
         controller.close()
-        windows.removeValue(forKey: id)
+        windows.removeValue(forKey: role)
         continue
       }
 
       if hasSkyLight {
-        attachWindowToSkyLight(window, screenID: id, attemptsRemaining: 8)
+        attachWindowToSkyLight(window, role: role, attemptsRemaining: 8)
       }
 
-      if shouldHideInFullscreen(for: screen, screenID: id) {
+      if shouldHideInFullscreen(for: screen, role: role) {
         controller.hide()
       } else {
         controller.show()
@@ -202,20 +222,28 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
     }
 
     windows.removeAll()
-    skylightAttachedScreenIDs.removeAll()
+    skylightAttachedDisplayRoles.removeAll()
     spaceManager = nil
+  }
+
+  private func tearDownModels() {
+    for model in modelsByDisplayRole.values {
+      model.stop()
+    }
+
+    modelsByDisplayRole.removeAll()
   }
 
   private func attachWindowToSkyLight(
     _ window: NSWindow,
-    screenID: String,
+    role: WorkspaceDisplayRole,
     attemptsRemaining: Int
   ) {
     guard let spaceManager else { return }
 
     do {
       try spaceManager.attachWindow(window)
-      skylightAttachedScreenIDs.insert(screenID)
+      skylightAttachedDisplayRoles.insert(role)
     } catch {
       if attemptsRemaining > 0 {
         let retryDelay = DispatchTimeInterval.milliseconds(60)
@@ -223,7 +251,7 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
           guard let self, let window else { return }
           self.attachWindowToSkyLight(
             window,
-            screenID: screenID,
+            role: role,
             attemptsRemaining: attemptsRemaining - 1
           )
         }
@@ -231,18 +259,18 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
       }
 
       logger.error(
-        "SkyLight attach failed for screen id=\(screenID, privacy: .public): \(error.localizedDescription, privacy: .public)"
+        "SkyLight attach failed for display role=\(role.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)"
       )
-      skylightAttachedScreenIDs.remove(screenID)
+      skylightAttachedDisplayRoles.remove(role)
       logger.error(
-        "Keeping overlay window visible without SkyLight space binding for screen id=\(screenID, privacy: .public)"
+        "Keeping overlay window visible without SkyLight space binding for display role=\(role.rawValue, privacy: .public)"
       )
-      windows[screenID]?.show()
+      windows[role]?.show()
     }
   }
 
-  private func shouldHideInFullscreen(for screen: NSScreen, screenID: String) -> Bool {
-    guard skylightAttachedScreenIDs.contains(screenID) else {
+  private func shouldHideInFullscreen(for screen: NSScreen, role: WorkspaceDisplayRole) -> Bool {
+    guard skylightAttachedDisplayRoles.contains(role) else {
       return false
     }
 
@@ -253,23 +281,76 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
     return spaceManager.isFullscreen(screen: screen)
   }
 
-  private func resolvedScreens(scope: CustomMenubarDisplayScope) -> [NSScreen] {
-    // Gizmo currently renders the custom menubar only on the primary display.
-    let _ = scope
+  private func reconcileModels() {
+    let targetRoles = Set(targetDisplayRoles())
 
-    if let primaryScreen = NSScreen.screens.first {
-      return [primaryScreen]
+    for (role, model) in modelsByDisplayRole where !targetRoles.contains(role) {
+      model.stop()
+      modelsByDisplayRole.removeValue(forKey: role)
     }
 
-    return []
+    for role in targetRoles {
+      let model = modelsByDisplayRole[role] ?? {
+        let nextModel = CustomMenubarModel()
+        modelsByDisplayRole[role] = nextModel
+        return nextModel
+      }()
+
+      model.apply(config: config)
+
+      if let displayState = workspaceState.displayStates[role] {
+        model.updateWorkspaceState(
+          names: displayState.workspaceNames,
+          focusedWorkspaceName: displayState.activeWorkspaceName
+        )
+      }
+
+      if isRunning {
+        model.start()
+      }
+    }
   }
 
-  private func screenIdentifier(_ screen: NSScreen) -> String {
-    if let number = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber {
-      return number.stringValue
+  private func model(for role: WorkspaceDisplayRole) -> CustomMenubarModel? {
+    if modelsByDisplayRole[role] == nil {
+      reconcileModels()
     }
 
-    return UUID().uuidString
+    return modelsByDisplayRole[role]
+  }
+
+  private func targetDisplayRoles() -> [WorkspaceDisplayRole] {
+    switch workspaceState.mode {
+    case .primaryOnly, .unified:
+      return workspaceState.displayStates[.primary] == nil ? [] : [.primary]
+    case .perDisplay:
+      return WorkspaceDisplayRole.allCases.filter { workspaceState.displayStates[$0] != nil }
+    }
+  }
+
+  private func resolvedDisplayTargets() -> [(role: WorkspaceDisplayRole, screen: NSScreen)] {
+    let screens = NSScreen.screens
+    guard !screens.isEmpty else { return [] }
+
+    var targets: [(role: WorkspaceDisplayRole, screen: NSScreen)] = []
+
+    for role in targetDisplayRoles() {
+      guard let screen = screen(for: role) else { continue }
+      targets.append((role: role, screen: screen))
+    }
+
+    return targets
+  }
+
+  private func screen(for role: WorkspaceDisplayRole) -> NSScreen? {
+    switch role {
+    case .primary:
+      return NSScreen.screens.first
+    case .secondary:
+      let screens = NSScreen.screens
+      guard screens.count >= 2 else { return nil }
+      return screens[1]
+    }
   }
 
   private func workspaceTapHandler() -> (String) -> Void {

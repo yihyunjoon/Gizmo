@@ -86,8 +86,14 @@ struct ConfigPathResolver {
 
     [workspace]
     enabled = true
-    names = ["q", "w", "e", "r", "t"]
+    mode = "primary_only"
     hide_strategy = "corner_offscreen"
+
+    [workspace.display_sets.primary]
+    names = ["q", "w", "e", "r", "t"]
+
+    [workspace.display_sets.secondary]
+    names = ["3", "4"]
 
     [gaps]
     inner.horizontal = 4

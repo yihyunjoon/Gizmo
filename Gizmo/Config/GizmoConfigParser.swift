@@ -81,7 +81,7 @@ struct GizmoConfigParser {
 
     appendUnknownKeys(
       in: workspaceTable,
-      allowed: ["enabled", "names", "hide_strategy"],
+      allowed: ["enabled", "mode", "names", "display_sets", "hide_strategy"],
       prefix: "workspace",
       errors: &errors
     )
@@ -94,39 +94,38 @@ struct GizmoConfigParser {
       config.workspace.enabled = enabled
     }
 
-    if let namesRaw = workspaceTable["names"] {
-      guard let namesArray = namesRaw.array else {
-        errors.append("workspace.names: Expected array, got \(namesRaw.type)")
+    if let modeRaw = workspaceTable["mode"] {
+      guard let modeValue = modeRaw.string else {
+        errors.append("workspace.mode: Expected string, got \(modeRaw.type)")
         return
       }
 
-      var parsedNames: [String] = []
-      var uniqueNames: Set<String> = []
-      for (index, value) in namesArray.enumerated() {
-        guard let rawName = value.string else {
-          errors.append("workspace.names[\(index)]: Expected string, got \(value.type)")
-          continue
-        }
-
-        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty else {
-          errors.append("workspace.names[\(index)]: Empty workspace name is not allowed.")
-          continue
-        }
-
-        guard uniqueNames.insert(name).inserted else {
-          errors.append("workspace.names[\(index)]: Duplicate workspace name '\(name)'.")
-          continue
-        }
-
-        parsedNames.append(name)
+      guard let mode = WorkspaceMode(rawValue: modeValue) else {
+        errors.append(
+          "workspace.mode: Invalid value '\(modeValue)'. Allowed: primary_only, per_display, unified."
+        )
+        return
       }
 
-      if parsedNames.isEmpty {
-        errors.append("workspace.names: At least one workspace name is required.")
-      } else {
-        config.workspace.names = parsedNames
+      config.workspace.mode = mode
+    }
+
+    if let namesRaw = workspaceTable["names"] {
+      if let parsedNames = parseWorkspaceNamesArray(
+        namesRaw,
+        path: "workspace.names",
+        errors: &errors
+      ) {
+        config.workspace.primaryNames = parsedNames
       }
+    }
+
+    if let displaySetsRaw = workspaceTable["display_sets"] {
+      parseWorkspaceDisplaySets(
+        displaySetsRaw,
+        workspaceConfig: &config.workspace,
+        errors: &errors
+      )
     }
 
     if let hideStrategyRaw = workspaceTable["hide_strategy"] {
@@ -143,6 +142,145 @@ struct GizmoConfigParser {
       }
 
       config.workspace.hideStrategy = hideStrategy
+    }
+
+    validateWorkspaceNames(config: config.workspace, errors: &errors)
+  }
+
+  private func parseWorkspaceDisplaySets(
+    _ raw: TOMLValueConvertible,
+    workspaceConfig: inout WorkspaceConfig,
+    errors: inout [String]
+  ) {
+    guard let displaySetsTable = raw.table else {
+      errors.append("workspace.display_sets: Expected table, got \(raw.type)")
+      return
+    }
+
+    appendUnknownKeys(
+      in: displaySetsTable,
+      allowed: ["primary", "secondary"],
+      prefix: "workspace.display_sets",
+      errors: &errors
+    )
+
+    if let primaryRaw = displaySetsTable["primary"] {
+      parseWorkspaceDisplaySet(
+        primaryRaw,
+        role: .primary,
+        workspaceConfig: &workspaceConfig,
+        errors: &errors
+      )
+    }
+
+    if let secondaryRaw = displaySetsTable["secondary"] {
+      parseWorkspaceDisplaySet(
+        secondaryRaw,
+        role: .secondary,
+        workspaceConfig: &workspaceConfig,
+        errors: &errors
+      )
+    }
+  }
+
+  private func parseWorkspaceDisplaySet(
+    _ raw: TOMLValueConvertible,
+    role: WorkspaceDisplayRole,
+    workspaceConfig: inout WorkspaceConfig,
+    errors: inout [String]
+  ) {
+    let rolePath = "workspace.display_sets.\(role.rawValue)"
+
+    guard let roleTable = raw.table else {
+      errors.append("\(rolePath): Expected table, got \(raw.type)")
+      return
+    }
+
+    appendUnknownKeys(
+      in: roleTable,
+      allowed: ["names"],
+      prefix: rolePath,
+      errors: &errors
+    )
+
+    guard let namesRaw = roleTable["names"] else {
+      errors.append("\(rolePath).names: Missing required key.")
+      return
+    }
+
+    guard let parsedNames = parseWorkspaceNamesArray(
+      namesRaw,
+      path: "\(rolePath).names",
+      errors: &errors
+    ) else {
+      return
+    }
+
+    switch role {
+    case .primary:
+      workspaceConfig.primaryNames = parsedNames
+    case .secondary:
+      workspaceConfig.secondaryNames = parsedNames
+    }
+  }
+
+  private func parseWorkspaceNamesArray(
+    _ raw: TOMLValueConvertible,
+    path: String,
+    errors: inout [String]
+  ) -> [String]? {
+    guard let namesArray = raw.array else {
+      errors.append("\(path): Expected array, got \(raw.type)")
+      return nil
+    }
+
+    var parsedNames: [String] = []
+    var uniqueNames: Set<String> = []
+
+    for (index, value) in namesArray.enumerated() {
+      guard let rawName = value.string else {
+        errors.append("\(path)[\(index)]: Expected string, got \(value.type)")
+        continue
+      }
+
+      let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !name.isEmpty else {
+        errors.append("\(path)[\(index)]: Empty workspace name is not allowed.")
+        continue
+      }
+
+      guard uniqueNames.insert(name).inserted else {
+        errors.append("\(path)[\(index)]: Duplicate workspace name '\(name)'.")
+        continue
+      }
+
+      parsedNames.append(name)
+    }
+
+    if parsedNames.isEmpty {
+      errors.append("\(path): At least one workspace name is required.")
+      return nil
+    }
+
+    return parsedNames
+  }
+
+  private func validateWorkspaceNames(
+    config: WorkspaceConfig,
+    errors: inout [String]
+  ) {
+    var seen: [String: WorkspaceDisplayRole] = [:]
+
+    for role in WorkspaceDisplayRole.allCases {
+      for name in config.names(for: role) {
+        if let previousRole = seen[name] {
+          errors.append(
+            "workspace.display_sets.\(role.rawValue).names: Workspace name '\(name)' duplicates \(previousRole.rawValue). Workspace names must be globally unique."
+          )
+        } else {
+          seen[name] = role
+        }
+      }
     }
   }
 

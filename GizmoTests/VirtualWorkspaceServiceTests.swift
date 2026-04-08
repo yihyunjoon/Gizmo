@@ -378,6 +378,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
     )
     let store = MockWorkspaceMappingStore(
       loadSnapshot: WorkspaceMappingSnapshot(
+        activeWorkspaceNamesByDisplay: [WorkspaceDisplayRole.primary.rawValue: "2"],
         workspaceWindows: [
           "1": [activeKey],
           "2": [inactiveKey],
@@ -406,7 +407,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
     )
     let store = MockWorkspaceMappingStore(
       loadSnapshot: WorkspaceMappingSnapshot(
-        activeWorkspaceName: "2",
+        activeWorkspaceNamesByDisplay: [WorkspaceDisplayRole.primary.rawValue: "2"],
         workspaceWindows: [
           "1": [],
           "2": [],
@@ -431,7 +432,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
     )
     let store = MockWorkspaceMappingStore(
       loadSnapshot: WorkspaceMappingSnapshot(
-        activeWorkspaceName: "3",
+        activeWorkspaceNamesByDisplay: [WorkspaceDisplayRole.primary.rawValue: "3"],
         workspaceWindows: [
           "1": [],
           "2": [],
@@ -527,7 +528,10 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
 
     let persistedSnapshot = try XCTUnwrap(store.savedSnapshots.last)
 
-    XCTAssertEqual(persistedSnapshot.activeWorkspaceName, "2")
+    XCTAssertEqual(
+      persistedSnapshot.activeWorkspaceNamesByDisplay[WorkspaceDisplayRole.primary.rawValue],
+      "2"
+    )
     XCTAssertEqual(Set(persistedSnapshot.workspaceWindows["1", default: []]), workspace1KeysBefore)
     XCTAssertEqual(Set(persistedSnapshot.workspaceWindows["2", default: []]), workspace2KeysBefore)
     XCTAssertEqual(Set(persistedSnapshot.savedFrames.keys), [key1])
@@ -633,7 +637,9 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
   private func makeWorkspaceConfig() -> WorkspaceConfig {
     WorkspaceConfig(
       enabled: true,
-      names: ["1", "2"],
+      mode: .primaryOnly,
+      primaryNames: ["1", "2"],
+      secondaryNames: WorkspaceConfig.defaultSecondaryNames,
       hideStrategy: .cornerOffscreen
     )
   }
@@ -660,7 +666,8 @@ private final class MockWorkspaceWindowDriver: WorkspaceWindowDriver {
   var fallbackFocusedWindow: ManagedWindowRef?
   var manageableWindows: [ManagedWindowRef]
   var frames: [WindowKey: CGRect]
-  var visibleFrame: CGRect?
+  var primaryVisibleFrame: CGRect?
+  var secondaryVisibleFrame: CGRect?
 
   private(set) var setFrameCalls: [SetFrameCall] = []
   private(set) var focusCalls: [WindowKey] = []
@@ -668,11 +675,13 @@ private final class MockWorkspaceWindowDriver: WorkspaceWindowDriver {
   init(
     manageableWindows: [ManagedWindowRef],
     frames: [WindowKey: CGRect],
-    visibleFrame: CGRect?
+    visibleFrame: CGRect?,
+    secondaryVisibleFrame: CGRect? = nil
   ) {
     self.manageableWindows = manageableWindows
     self.frames = frames
-    self.visibleFrame = visibleFrame
+    self.primaryVisibleFrame = visibleFrame
+    self.secondaryVisibleFrame = secondaryVisibleFrame
     self.focusedWindow = manageableWindows.first
   }
 
@@ -711,8 +720,17 @@ private final class MockWorkspaceWindowDriver: WorkspaceWindowDriver {
     frames[window.key] != nil
   }
 
-  func singleMonitorVisibleFrame() -> CGRect? {
-    visibleFrame
+  func screenFrame(for role: WorkspaceDisplayRole) -> CGRect? {
+    switch role {
+    case .primary:
+      primaryVisibleFrame
+    case .secondary:
+      secondaryVisibleFrame
+    }
+  }
+
+  func visibleFrame(for role: WorkspaceDisplayRole) -> CGRect? {
+    screenFrame(for: role)
   }
 
   func resetRecordedCalls() {
