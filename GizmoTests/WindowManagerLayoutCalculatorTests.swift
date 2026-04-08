@@ -52,6 +52,18 @@ final class WindowManagerLayoutCalculatorTests: XCTestCase {
     XCTAssertEqual(target, visibleFrame)
   }
 
+  func testPlaceCenterUsesFullHeightAndHalfWidthCenteredHorizontally() {
+    let visibleFrame = CGRect(x: 10, y: 20, width: 101, height: 80)
+
+    let target = WindowManagerLayoutCalculator.targetFrame(
+      for: .placeCenter,
+      in: visibleFrame,
+      innerHorizontalGap: 0
+    )
+
+    XCTAssertEqual(target, CGRect(x: 35, y: 20, width: 50, height: 80))
+  }
+
   func testExcessiveOuterGapsCanProduceInvalidFrame() {
     let visibleFrame = CGRect(x: 0, y: 0, width: 50, height: 50)
     let outer = WindowManagerOuterGaps(

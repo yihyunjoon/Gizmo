@@ -61,6 +61,7 @@ final class WindowManagerService {
 
   private let permissionService: AccessibilityPermissionService
   private let customMenubarConfigProvider: @MainActor () -> CustomMenubarConfig
+  private let workspaceConfigProvider: @MainActor () -> WorkspaceConfig
   private let gapsConfigProvider: @MainActor () -> WindowManagerGapsConfig
   private let fallbackWindowElementProvider: @MainActor () -> AXUIElement?
 
@@ -69,11 +70,13 @@ final class WindowManagerService {
   init(
     permissionService: AccessibilityPermissionService,
     customMenubarConfigProvider: @escaping @MainActor () -> CustomMenubarConfig = { .default },
+    workspaceConfigProvider: @escaping @MainActor () -> WorkspaceConfig = { .default },
     gapsConfigProvider: @escaping @MainActor () -> WindowManagerGapsConfig = { .default },
     fallbackWindowElementProvider: @escaping @MainActor () -> AXUIElement? = { nil }
   ) {
     self.permissionService = permissionService
     self.customMenubarConfigProvider = customMenubarConfigProvider
+    self.workspaceConfigProvider = workspaceConfigProvider
     self.gapsConfigProvider = gapsConfigProvider
     self.fallbackWindowElementProvider = fallbackWindowElementProvider
   }
@@ -198,9 +201,22 @@ final class WindowManagerService {
   private func shouldReserveCustomMenubarSpace(
     on screen: NSScreen
   ) -> Bool {
-    // Custom menubar currently renders only on the primary display.
-    guard let primaryScreen = NSScreen.screens.first else { return false }
-    return screenIdentifier(screen) == screenIdentifier(primaryScreen)
+    let workspaceConfig = workspaceConfigProvider()
+
+    switch workspaceConfig.mode {
+    case .primaryOnly, .unified:
+      guard let primaryScreen = NSScreen.screens.first else { return false }
+      return screenIdentifier(screen) == screenIdentifier(primaryScreen)
+    case .perDisplay:
+      guard let displayRole = displayRole(for: screen) else { return false }
+
+      return switch displayRole {
+      case .primary:
+        true
+      case .secondary:
+        !workspaceConfig.secondaryNames.isEmpty
+      }
+    }
   }
 
   private func screenIdentifier(_ screen: NSScreen) -> String {
@@ -209,6 +225,22 @@ final class WindowManagerService {
     }
 
     return UUID().uuidString
+  }
+
+  private func displayRole(for screen: NSScreen) -> WorkspaceDisplayRole? {
+    let screens = NSScreen.screens
+    guard let screenIndex = screens.firstIndex(where: { screenIdentifier($0) == screenIdentifier(screen) }) else {
+      return nil
+    }
+
+    return switch screenIndex {
+    case 0:
+      .primary
+    case 1:
+      .secondary
+    default:
+      nil
+    }
   }
 
   private func resolveWindowElement(
@@ -289,13 +321,12 @@ struct WindowManagerLayoutCalculator {
         height: visibleFrame.height
       )
     case .placeCenter:
-      let targetWidth = max(1, floor(visibleFrame.width * 0.6))
-      let targetHeight = max(1, floor(visibleFrame.height * 0.8))
+      let targetWidth = max(1, floor(visibleFrame.width / 2))
       return CGRect(
         x: floor(visibleFrame.midX - (targetWidth / 2)),
-        y: floor(visibleFrame.midY - (targetHeight / 2)),
+        y: visibleFrame.minY,
         width: targetWidth,
-        height: targetHeight
+        height: visibleFrame.height
       )
     case .fullScreen:
       return visibleFrame
