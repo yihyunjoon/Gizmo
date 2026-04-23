@@ -105,6 +105,7 @@ struct AppBootstrap {
     customMenubarRuntimeService.updateWorkspaceState(virtualWorkspaceService.state)
     launcherPanelService.refreshCommandList()
     launcherPanelService.preloadPanel()
+    InputSourceService.preloadEnglishInputSource()
     launcherAppCatalogService.refreshInBackground()
 
     self.configStore = configStore

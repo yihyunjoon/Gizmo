@@ -1,11 +1,18 @@
 import Carbon
 import Foundation
 
+@MainActor
 enum InputSourceService {
   private static let preferredEnglishInputSourceIDs = [
     "com.apple.keylayout.ABC",
     "com.apple.keylayout.US",
   ]
+
+  private static var cachedEnglishInputSource: TISInputSource?
+
+  static func preloadEnglishInputSource() {
+    _ = englishInputSource()
+  }
 
   static func switchToEnglishInputSource() -> String? {
     guard let currentInputSource = currentInputSource() else { return nil }
@@ -30,13 +37,19 @@ enum InputSourceService {
   }
 
   private static func englishInputSource() -> TISInputSource? {
+    if let cachedEnglishInputSource {
+      return cachedEnglishInputSource
+    }
+
     for inputSourceID in preferredEnglishInputSourceIDs {
       if let inputSource = inputSource(withID: inputSourceID) {
+        cachedEnglishInputSource = inputSource
         return inputSource
       }
     }
 
-    return firstASCIICapableKeyboardLayout()
+    cachedEnglishInputSource = firstASCIICapableKeyboardLayout()
+    return cachedEnglishInputSource
   }
 
   private static func inputSource(withID inputSourceID: String) -> TISInputSource? {
