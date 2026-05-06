@@ -161,7 +161,7 @@ final class CommandShortcutService {
       let commandID = command.id
 
       shortcutEventTasks[commandID] = Task { @MainActor [weak self] in
-        for await _ in KeyboardShortcuts.events(.keyUp, for: shortcutName) {
+        for await _ in KeyboardShortcuts.events(.keyDown, for: shortcutName) {
           guard let self else { return }
           guard let command = self.commands.first(where: { $0.id == commandID }) else { continue }
           _ = self.execute(command)
