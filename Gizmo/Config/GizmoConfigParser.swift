@@ -21,6 +21,7 @@ struct GizmoConfigParser {
       "config-version",
       "launcher",
       "custom_menubar",
+      "custom_widgets",
       "workspace",
       "gaps",
       "keystats",
@@ -48,6 +49,10 @@ struct GizmoConfigParser {
 
     if let launcherValue = rawTable["launcher"] {
       parseLauncher(launcherValue, config: &config, errors: &errors)
+    }
+
+    if let customWidgetsValue = rawTable["custom_widgets"] {
+      parseCustomWidgets(customWidgetsValue, config: &config, errors: &errors)
     }
 
     if let customMenubarValue = rawTable["custom_menubar"] {
@@ -420,7 +425,6 @@ struct GizmoConfigParser {
         "widgets",
         "background_opacity",
         "horizontal_padding",
-        "clock_24h",
       ],
       prefix: "custom_menubar",
       errors: &errors
@@ -496,24 +500,43 @@ struct GizmoConfigParser {
         return
       }
 
-      var widgets: [CustomMenubarWidget] = []
+      var widgets: [String] = []
+      var seenWidgetNames: Set<String> = []
 
       for (index, value) in widgetValues.enumerated() {
-        guard let widgetString = value.string else {
+        guard let rawWidgetName = value.string else {
           errors.append(
             "custom_menubar.widgets[\(index)]: Expected string, got \(value.type)"
           )
           continue
         }
 
-        guard let widget = CustomMenubarWidget(rawValue: widgetString) else {
+        let widgetName = rawWidgetName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !widgetName.isEmpty else {
           errors.append(
-            "custom_menubar.widgets[\(index)]: Invalid value '\(widgetString)'. Allowed: front_app, clock."
+            "custom_menubar.widgets[\(index)]: Empty widget name is not allowed."
           )
           continue
         }
 
-        widgets.append(widget)
+        guard seenWidgetNames.insert(widgetName).inserted else {
+          errors.append(
+            "custom_menubar.widgets[\(index)]: Duplicate widget name '\(widgetName)'."
+          )
+          continue
+        }
+
+        guard
+          config.customMenubar.customWidgets[widgetName] != nil
+        else {
+          errors.append(
+            "custom_menubar.widgets[\(index)]: Unknown widget '\(widgetName)'. Custom widgets must be declared under [custom_widgets.<name>]."
+          )
+          continue
+        }
+
+        widgets.append(widgetName)
       }
 
       if !widgets.isEmpty {
@@ -556,15 +579,106 @@ struct GizmoConfigParser {
 
       config.customMenubar.horizontalPadding = padding
     }
+  }
 
-    if let clock24hRaw = menubarTable["clock_24h"] {
-      guard let clock24h = clock24hRaw.bool else {
-        errors.append("custom_menubar.clock_24h: Expected bool, got \(clock24hRaw.type)")
+  private func parseCustomWidgets(
+    _ raw: TOMLValueConvertible,
+    config: inout GizmoConfig,
+    errors: inout [String]
+  ) {
+    guard let customWidgetsTable = raw.table else {
+      errors.append("custom_widgets: Expected table, got \(raw.type)")
+      return
+    }
+
+    for (widgetName, widgetRaw) in customWidgetsTable {
+      parseCustomWidget(
+        named: widgetName,
+        raw: widgetRaw,
+        config: &config,
+        errors: &errors
+      )
+    }
+  }
+
+  private func parseCustomWidget(
+    named widgetName: String,
+    raw: TOMLValueConvertible,
+    config: inout GizmoConfig,
+    errors: inout [String]
+  ) {
+    let widgetPath = "custom_widgets.\(widgetName)"
+
+    guard let widgetTable = raw.table else {
+      errors.append("\(widgetPath): Expected table, got \(raw.type)")
+      return
+    }
+
+    appendUnknownKeys(
+      in: widgetTable,
+      allowed: ["shell_command", "refresh_interval", "widget_alignment"],
+      prefix: widgetPath,
+      errors: &errors
+    )
+
+    guard let shellCommandRaw = widgetTable["shell_command"] else {
+      errors.append("\(widgetPath).shell_command: Missing required key.")
+      return
+    }
+
+    guard let rawShellCommand = shellCommandRaw.string else {
+      errors.append("\(widgetPath).shell_command: Expected string, got \(shellCommandRaw.type)")
+      return
+    }
+
+    let shellCommand = rawShellCommand.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !shellCommand.isEmpty else {
+      errors.append("\(widgetPath).shell_command: Empty command is not allowed.")
+      return
+    }
+
+    var refreshInterval = CustomWidgetConfig.defaultRefreshInterval
+    var widgetAlignment = CustomWidgetAlignment.default
+
+    if let refreshIntervalRaw = widgetTable["refresh_interval"] {
+      guard let parsedRefreshInterval = numberValue(from: refreshIntervalRaw) else {
+        errors.append(
+          "\(widgetPath).refresh_interval: Expected number, got \(refreshIntervalRaw.type)"
+        )
         return
       }
 
-      config.customMenubar.clock24h = clock24h
+      guard (1.0...3600.0).contains(parsedRefreshInterval) else {
+        errors.append("\(widgetPath).refresh_interval: Out of range. Allowed: 1...3600.")
+        return
+      }
+
+      refreshInterval = parsedRefreshInterval
     }
+
+    if let widgetAlignmentRaw = widgetTable["widget_alignment"] {
+      guard let rawWidgetAlignment = widgetAlignmentRaw.string else {
+        errors.append(
+          "\(widgetPath).widget_alignment: Expected string, got \(widgetAlignmentRaw.type)"
+        )
+        return
+      }
+
+      guard let parsedWidgetAlignment = CustomWidgetAlignment(rawValue: rawWidgetAlignment) else {
+        errors.append(
+          "\(widgetPath).widget_alignment: Invalid value '\(rawWidgetAlignment)'. Allowed: left, center, right."
+        )
+        return
+      }
+
+      widgetAlignment = parsedWidgetAlignment
+    }
+
+    config.customMenubar.customWidgets[widgetName] = CustomWidgetConfig(
+      shellCommand: shellCommand,
+      refreshInterval: refreshInterval,
+      widgetAlignment: widgetAlignment
+    )
   }
 
   private func parseGaps(

@@ -9,15 +9,19 @@ final class GizmoConfigParserTests: XCTestCase {
       """
       config-version = 1
 
+      [custom_widgets.battery]
+      shell_command = "echo battery"
+      refresh_interval = 10
+      widget_alignment = "center"
+
       [custom_menubar]
       enabled = true
       border = false
       display_scope = "active"
       height = 32
-      widgets = ["clock", "front_app"]
+      widgets = ["battery"]
       background_opacity = 0.6
       horizontal_padding = 12
-      clock_24h = false
       """
     )
 
@@ -29,10 +33,17 @@ final class GizmoConfigParserTests: XCTestCase {
     XCTAssertFalse(config.customMenubar.border)
     XCTAssertEqual(config.customMenubar.displayScope, .active)
     XCTAssertEqual(config.customMenubar.height, 32)
-    XCTAssertEqual(config.customMenubar.widgets, [.clock, .frontApp])
+    XCTAssertEqual(config.customMenubar.widgets, ["battery"])
     XCTAssertEqual(config.customMenubar.backgroundOpacity, 0.6)
     XCTAssertEqual(config.customMenubar.horizontalPadding, 12)
-    XCTAssertFalse(config.customMenubar.clock24h)
+    XCTAssertEqual(
+      config.customMenubar.customWidgets["battery"],
+      CustomWidgetConfig(
+        shellCommand: "echo battery",
+        refreshInterval: 10,
+        widgetAlignment: .center
+      )
+    )
   }
 
   func testInvalidDisplayScopeReturnsError() {
@@ -49,13 +60,27 @@ final class GizmoConfigParserTests: XCTestCase {
     XCTAssertTrue(result.errors.contains { $0.contains("custom_menubar.display_scope") })
   }
 
-  func testInvalidWidgetsReturnsError() {
+  func testUnknownCustomWidgetReturnsError() {
     let result = parser.parse(
       """
       config-version = 1
 
       [custom_menubar]
-      widgets = ["clock", "nope"]
+      widgets = ["nope"]
+      """
+    )
+
+    XCTAssertNil(result.config)
+    XCTAssertTrue(result.errors.contains { $0.contains("custom_menubar.widgets") })
+  }
+
+  func testFormerBuiltInWidgetNamesRequireCustomDefinitions() {
+    let result = parser.parse(
+      """
+      config-version = 1
+
+      [custom_menubar]
+      widgets = ["clock", "front_app"]
       """
     )
 

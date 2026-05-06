@@ -79,10 +79,14 @@ struct ConfigPathResolver {
     display_scope = "all"
     position = "bottom"
     height = 30
-    widgets = ["front_app", "clock"]
+    widgets = []
     background_opacity = 0.75
     horizontal_padding = 8
-    clock_24h = true
+
+    # [custom_widgets.battery]
+    # shell_command = "pmset -g batt | tail -n 1"
+    # refresh_interval = 10
+    # widget_alignment = "right" # left | center | right
 
     [workspace]
     enabled = true

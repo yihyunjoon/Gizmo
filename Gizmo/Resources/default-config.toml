@@ -17,10 +17,14 @@ border = true
 display_scope = "primary" # all | active | primary
 position = "bottom" # top | bottom
 height = 30
-widgets = ["front_app", "clock"] # front_app | clock
+widgets = [] # custom widget names from [custom_widgets.<name>]
 background_opacity = 0.75
 horizontal_padding = 8
-clock_24h = true
+
+# [custom_widgets.battery]
+# shell_command = "pmset -g batt | tail -n 1"
+# refresh_interval = 10
+# widget_alignment = "right" # left | center | right
 
 [workspace]
 enabled = true

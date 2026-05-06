@@ -41,6 +41,11 @@ struct CustomMenubarSettingsView: View {
         )
 
         LabeledContent(
+          String(localized: "Custom Widgets"),
+          value: configStore.active.customMenubar.customWidgets.keys.sorted().titleText
+        )
+
+        LabeledContent(
           String(localized: "Background Opacity"),
           value: String(format: "%.2f", configStore.active.customMenubar.backgroundOpacity)
         )
@@ -50,17 +55,10 @@ struct CustomMenubarSettingsView: View {
           value: String(format: "%.0f", configStore.active.customMenubar.horizontalPadding)
         )
 
-        LabeledContent(
-          String(localized: "Clock 24H"),
-          value: configStore.active.customMenubar.clock24h
-            ? String(localized: "Enabled")
-            : String(localized: "Disabled")
-        )
-
         Text(
           String(
             localized:
-              "Custom menubar options are configured in config.toml under [custom_menubar]."
+              "Custom menubar options are configured in config.toml under [custom_menubar], and custom widget definitions live under [custom_widgets.<name>]."
           )
         )
         .foregroundStyle(.secondary)
@@ -84,15 +82,14 @@ private extension CustomMenubarPosition {
   }
 }
 
-private extension Array where Element == CustomMenubarWidget {
+private extension Array where Element == String {
   var titleText: String {
-    let names = map { widget in
-      switch widget {
-      case .clock:
-        return String(localized: "Clock")
-      case .frontApp:
-        return String(localized: "Front App")
-      }
+    guard !isEmpty else {
+      return String(localized: "None")
+    }
+
+    let names = map { widgetName in
+      widgetName
     }
 
     return names.joined(separator: ", ")

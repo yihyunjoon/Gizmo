@@ -196,10 +196,10 @@ struct CustomMenubarConfig: Equatable {
   var displayScope: CustomMenubarDisplayScope
   var position: CustomMenubarPosition
   var height: Double
-  var widgets: [CustomMenubarWidget]
+  var widgets: [String]
+  var customWidgets: [String: CustomWidgetConfig]
   var backgroundOpacity: Double
   var horizontalPadding: Double
-  var clock24h: Bool
 
   static let `default` = CustomMenubarConfig(
     enabled: false,
@@ -207,11 +207,19 @@ struct CustomMenubarConfig: Equatable {
     displayScope: .primary,
     position: .bottom,
     height: 30,
-    widgets: [.frontApp, .clock],
+    widgets: [],
+    customWidgets: [:],
     backgroundOpacity: 0.75,
-    horizontalPadding: 8,
-    clock24h: true
+    horizontalPadding: 8
   )
+}
+
+struct CustomWidgetConfig: Equatable {
+  static let defaultRefreshInterval = 5.0
+
+  var shellCommand: String
+  var refreshInterval: Double
+  var widgetAlignment: CustomWidgetAlignment
 }
 
 enum CustomMenubarDisplayScope: String, CaseIterable, Equatable {
@@ -225,9 +233,12 @@ enum CustomMenubarPosition: String, CaseIterable, Equatable {
   case bottom
 }
 
-enum CustomMenubarWidget: String, CaseIterable, Equatable {
-  case clock
-  case frontApp = "front_app"
+enum CustomWidgetAlignment: String, CaseIterable, Equatable {
+  case left
+  case center
+  case right
+
+  static let `default`: Self = .right
 }
 
 extension KeyboardShortcuts.Key {

@@ -10,21 +10,17 @@ struct CustomMenubarRootView: View {
 
       HStack(spacing: 10) {
         workspaceStrip
+        customWidgets(alignedTo: .left)
         Spacer(minLength: 0)
-
-        if model.hasWidget(.clock) {
-          clockView
-        }
+        customWidgets(alignedTo: .right)
       }
       .padding(.horizontal, CGFloat(model.config.horizontalPadding))
       .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-      if model.hasWidget(.frontApp) {
-        frontAppView
-          .padding(.horizontal, CGFloat(model.config.horizontalPadding))
-          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-          .allowsHitTesting(false)
-      }
+      customWidgets(alignedTo: .center)
+        .padding(.horizontal, CGFloat(model.config.horizontalPadding))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .allowsHitTesting(false)
     }
     .frame(height: CGFloat(model.config.height))
     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -71,19 +67,20 @@ private extension CustomMenubarRootView {
     }
   }
 
-  var frontAppView: some View {
-    Text(model.frontAppName)
-      .font(.system(size: 11, weight: .regular))
-      .foregroundStyle(.white.opacity(0.92))
-      .lineLimit(1)
-      .truncationMode(.tail)
+  func customWidgets(alignedTo alignment: CustomWidgetAlignment) -> some View {
+    HStack(spacing: 10) {
+      ForEach(model.widgetNames(alignedTo: alignment), id: \.self) { widgetName in
+        customWidgetView(named: widgetName)
+      }
+    }
   }
 
-  var clockView: some View {
-    Text(model.clockText)
+  func customWidgetView(named widgetName: String) -> some View {
+    Text(model.customWidgetText(named: widgetName))
       .font(.system(size: 11, weight: .semibold, design: .monospaced))
       .foregroundStyle(.white.opacity(0.96))
       .lineLimit(1)
+      .truncationMode(.tail)
   }
 }
 

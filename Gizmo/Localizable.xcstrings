@@ -186,12 +186,6 @@
         }
       }
     },
-    "Clock" : {
-
-    },
-    "Clock 24H" : {
-
-    },
     "Command" : {
       "comment" : "Title for the Command tab, shown in the sidebar."
     },
@@ -249,7 +243,10 @@
     "Custom Menubar" : {
       "comment" : "Title for the Custom Menubar tab, shown in the sidebar."
     },
-    "Custom menubar options are configured in config.toml under [custom_menubar]." : {
+    "Custom menubar options are configured in config.toml under [custom_menubar], and custom widget definitions live under [custom_widgets.<name>]." : {
+
+    },
+    "Custom Widgets" : {
 
     },
     "Data" : {
@@ -306,9 +303,6 @@
 
     },
     "Force English Input Source" : {
-
-    },
-    "Front App" : {
 
     },
     "General" : {
@@ -628,6 +622,9 @@
           }
         }
       }
+    },
+    "None" : {
+
     },
     "Open Config" : {
 
