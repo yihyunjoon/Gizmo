@@ -47,6 +47,10 @@ struct WorkspaceView: View {
           value: "\(snapshot.managedWindowKeys.count)"
         )
         LabeledContent(
+          String(localized: "Unmanaged Windows"),
+          value: "\(snapshot.unmanagedWindowKeys.count)"
+        )
+        LabeledContent(
           String(localized: "Hidden Managed Windows"),
           value: "\(snapshot.hiddenWindowKeys.count)"
         )
@@ -86,6 +90,26 @@ struct WorkspaceView: View {
           }
           .padding(.vertical, 2)
         }
+
+        Divider()
+
+        VStack(alignment: .leading, spacing: 6) {
+          Text("\(String(localized: "Unmanaged Windows")) (\(snapshot.unmanagedWindowKeys.count))")
+            .font(.system(size: 13, weight: .semibold, design: .rounded))
+
+          if snapshot.unmanagedWindowKeys.isEmpty {
+            Text(String(localized: "No unmanaged windows."))
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+          } else {
+            ForEach(snapshot.unmanagedWindowKeys, id: \.self) { windowKey in
+              Text(windowDisplayName(for: windowKey))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            }
+          }
+        }
+        .padding(.vertical, 2)
       } header: {
         Text(String(localized: "Workspace Mapping"))
       }

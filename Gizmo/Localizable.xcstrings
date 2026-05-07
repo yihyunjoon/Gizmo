@@ -601,6 +601,9 @@
     "No matching results." : {
 
     },
+    "No unmanaged windows." : {
+
+    },
     "No usable screen found." : {
       "localizations" : {
         "en" : {
@@ -939,6 +942,9 @@
 
     },
     "Unknown Window" : {
+
+    },
+    "Unmanaged Windows" : {
 
     },
     "URL" : {

@@ -94,6 +94,7 @@ struct WorkspaceDisplayState: Equatable {
 struct VirtualWorkspaceDebugSnapshot: Equatable {
   let state: VirtualWorkspaceState
   let workspaceWindows: [String: [WindowKey]]
+  let unmanagedWindowKeys: [WindowKey]
   let windowDisplayNames: [WindowKey: String]
   let hiddenWindowKeys: Set<WindowKey>
 
@@ -509,10 +510,18 @@ final class VirtualWorkspaceService {
     for window in allManagedWindows {
       windowDisplayNames[window.key] = window.displayName
     }
+    let managedWindowKeys = Set(mappedWorkspaceWindows.values.flatMap { $0 })
+    let unmanagedWindows = manageableWindowsOnManagedDisplays.filter { window in
+      !managedWindowKeys.contains(window.key)
+    }
+    for window in unmanagedWindows {
+      windowDisplayNames[window.key] = window.displayName
+    }
 
     return VirtualWorkspaceDebugSnapshot(
       state: state,
       workspaceWindows: mappedWorkspaceWindows,
+      unmanagedWindowKeys: unmanagedWindows.map(\.key),
       windowDisplayNames: windowDisplayNames,
       hiddenWindowKeys: Set(savedFrames.keys)
     )
