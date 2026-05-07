@@ -638,6 +638,63 @@ final class WorkspaceServiceTests: XCTestCase {
     XCTAssertTrue(persistedSnapshot.savedFrames.isEmpty)
   }
 
+  func testWakeReconcilesChangedFallbackWindowKeysBeforeAdoptingUnknownWindows() {
+    let oldWindow1 = makeWindow(
+      key: "axel:100:old1",
+      processIdentifier: 100,
+      bundleIdentifier: "com.example.editor",
+      title: "Document A"
+    )
+    let oldWindow2 = makeWindow(
+      key: "axel:200:old2",
+      processIdentifier: 200,
+      bundleIdentifier: "com.example.browser",
+      title: "Document B"
+    )
+    let newWindow1 = makeWindow(
+      key: "axel:100:new1",
+      processIdentifier: 100,
+      bundleIdentifier: "com.example.editor",
+      title: "Document A"
+    )
+    let newWindow2 = makeWindow(
+      key: "axel:200:new2",
+      processIdentifier: 200,
+      bundleIdentifier: "com.example.browser",
+      title: "Document B"
+    )
+
+    let driver = MockWorkspaceWindowDriver(
+      manageableWindows: [oldWindow1, oldWindow2],
+      frames: [
+        oldWindow1.key: CGRect(x: 0, y: 0, width: 700, height: 500),
+        oldWindow2.key: CGRect(x: 20, y: 20, width: 700, height: 500),
+      ],
+      visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080)
+    )
+    let service = WorkspaceService(
+      driver: driver,
+      initialConfig: makeWorkspaceConfig(),
+      workspaceMappingStore: MockWorkspaceMappingStore()
+    )
+
+    driver.focusedWindow = oldWindow2
+    _ = service.moveFocusedWindowToWorkspace("2")
+
+    driver.manageableWindows = [newWindow1, newWindow2]
+    driver.frames = [
+      newWindow1.key: CGRect(x: 0, y: 0, width: 700, height: 500),
+      newWindow2.key: CGRect(x: 20, y: 20, width: 700, height: 500),
+    ]
+    driver.focusedWindow = newWindow1
+
+    service.handleSystemDidWake()
+    service.synchronizeActiveWorkspaceToFocusedWindowIfNeeded()
+
+    XCTAssertEqual(service.managedWindowKeys(in: "1"), [newWindow1.key])
+    XCTAssertEqual(service.managedWindowKeys(in: "2"), [newWindow2.key])
+  }
+
   func testWorkspaceSwitchLeavesSecondaryDisplayWindowsUnmanaged() {
     let primaryWindow = makeWindow(key: "axwn:100")
     let secondaryWindow = makeWindow(key: "axwn:200")
@@ -708,14 +765,18 @@ final class WorkspaceServiceTests: XCTestCase {
 
   private func makeWindow(
     key: WindowKey,
-    processIdentifier: pid_t? = nil
+    processIdentifier: pid_t? = nil,
+    bundleIdentifier: String? = nil,
+    appName: String = "Test App",
+    title: String? = nil
   ) -> ManagedWindowRef {
     ManagedWindowRef(
       key: key,
       element: nil,
       processIdentifier: processIdentifier,
-      appName: "Test App",
-      title: key
+      bundleIdentifier: bundleIdentifier,
+      appName: appName,
+      title: title ?? key
     )
   }
 }

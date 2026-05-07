@@ -6,11 +6,13 @@ final class WorkspaceFocusObserverService {
   var onFocusedWindowChanged: (() -> Void)?
   var onActiveApplicationChanged: ((pid_t) -> Void)?
   var onObservedWindowDestroyed: (() -> Void)?
+  var onSystemDidWake: (() -> Void)?
 
   private let permissionService: AccessibilityPermissionService
 
   private var isRunning = false
   private var activeApplicationObserver: NSObjectProtocol?
+  private var wakeObserver: NSObjectProtocol?
   private var axObserver: AXObserver?
   private var observedPID: pid_t?
   private var didScheduleFocusChange = false
@@ -26,6 +28,7 @@ final class WorkspaceFocusObserverService {
 
     isRunning = true
     observeActiveApplicationIfNeeded()
+    observeSystemWakeIfNeeded()
     refreshObserverForFrontmostApplication()
     scheduleFocusChange()
   }
@@ -39,6 +42,7 @@ final class WorkspaceFocusObserverService {
 
     isRunning = false
     removeActiveApplicationObserver()
+    removeWakeObserver()
     removeAXObserver()
     didScheduleFocusChange = false
   }
@@ -66,6 +70,35 @@ final class WorkspaceFocusObserverService {
       NSWorkspace.shared.notificationCenter.removeObserver(activeApplicationObserver)
       self.activeApplicationObserver = nil
     }
+  }
+
+  private func observeSystemWakeIfNeeded() {
+    guard wakeObserver == nil else { return }
+
+    wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+      forName: NSWorkspace.didWakeNotification,
+      object: nil,
+      queue: .main
+    ) { [weak self] _ in
+      Task { @MainActor [weak self] in
+        self?.handleSystemDidWake()
+      }
+    }
+  }
+
+  private func removeWakeObserver() {
+    if let wakeObserver {
+      NSWorkspace.shared.notificationCenter.removeObserver(wakeObserver)
+      self.wakeObserver = nil
+    }
+  }
+
+  private func handleSystemDidWake() {
+    guard isRunning else { return }
+
+    refreshObserverForFrontmostApplication()
+    onSystemDidWake?()
+    scheduleFocusChange()
   }
 
   private func handleActiveApplicationDidChange(_ processIdentifier: pid_t?) {

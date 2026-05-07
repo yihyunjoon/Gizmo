@@ -8,6 +8,7 @@ struct ManagedWindowRef: Hashable {
   let key: WindowKey
   let element: AXUIElement?
   let processIdentifier: pid_t?
+  let bundleIdentifier: String?
   let appName: String?
   let title: String?
 
@@ -15,12 +16,14 @@ struct ManagedWindowRef: Hashable {
     key: WindowKey,
     element: AXUIElement?,
     processIdentifier: pid_t? = nil,
+    bundleIdentifier: String? = nil,
     appName: String? = nil,
     title: String? = nil
   ) {
     self.key = key
     self.element = element
     self.processIdentifier = processIdentifier
+    self.bundleIdentifier = bundleIdentifier
     self.appName = appName
     self.title = title
   }
@@ -325,6 +328,7 @@ final class LiveWorkspaceWindowDriver: WorkspaceWindowDriver {
       key: windowKey(for: element),
       element: element,
       processIdentifier: processIdentifier(for: element),
+      bundleIdentifier: bundleIdentifier(for: element),
       appName: appName(for: element),
       title: title(for: element)
     )
@@ -419,10 +423,12 @@ final class WorkspaceService {
   private var savedFrames: [WindowKey: CGRect] = [:]
   private var pendingPersistedWorkspaceWindowKeys: [String: [WindowKey]]
   private var pendingPersistedSavedFrames: [WindowKey: PersistedWindowFrame]
+  private var pendingPersistedWindowIdentities: [WindowKey: PersistedWindowIdentity]
   private var lastPersistedWorkspaceSnapshot: WorkspaceMappingSnapshot?
   private var lastFocusedManagedWindowKeyByDisplay: [WorkspaceDisplayRole: WindowKey]
   private var lastFocusedManagedWindowWorkspaceNameByDisplay: [WorkspaceDisplayRole: String]
   private var ignoredDesktopActivationProcessIdentifier: pid_t?
+  private var windowIdentityStabilizationEndsAt: Date?
 
   var onStateDidChange: ((WorkspaceState) -> Void)?
 
@@ -464,6 +470,7 @@ final class WorkspaceService {
     )
     self.pendingPersistedWorkspaceWindowKeys = persistedSnapshot?.workspaceWindows ?? [:]
     self.pendingPersistedSavedFrames = persistedSnapshot?.savedFrames ?? [:]
+    self.pendingPersistedWindowIdentities = persistedSnapshot?.windowIdentities ?? [:]
     self.lastPersistedWorkspaceSnapshot = nil
     self.lastFocusedManagedWindowKeyByDisplay = [:]
     self.lastFocusedManagedWindowWorkspaceNameByDisplay = [:]
@@ -696,6 +703,17 @@ final class WorkspaceService {
     restoreFocusForClosedManagedWindowIfNeeded()
   }
 
+  func handleSystemDidWake() {
+    windowIdentityStabilizationEndsAt = Date().addingTimeInterval(3)
+
+    DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in
+      Task { @MainActor [weak self] in
+        self?.clearWindowIdentityStabilizationIfExpired()
+        self?.synchronizeActiveWorkspaceToFocusedWindowIfNeeded()
+      }
+    }
+  }
+
   func focusWorkspace(
     _ workspaceName: String,
     preserveFocusedWindow: Bool = false
@@ -882,11 +900,18 @@ final class WorkspaceService {
     }
   }
 
+  private var persistedWindowIdentities: [WindowKey: PersistedWindowIdentity] {
+    allManagedWindows.reduce(into: [WindowKey: PersistedWindowIdentity]()) { partialResult, window in
+      partialResult[window.key] = PersistedWindowIdentity(window)
+    }
+  }
+
   private var workspaceMappingSnapshot: WorkspaceMappingSnapshot {
     WorkspaceMappingSnapshot(
       activeWorkspaceNamesByDisplay: persistedActiveWorkspaceNamesByDisplay,
       workspaceWindows: workspaceWindowKeysMapping,
-      savedFrames: persistedSavedFrames
+      savedFrames: persistedSavedFrames,
+      windowIdentities: persistedWindowIdentities
     )
   }
 
@@ -958,6 +983,10 @@ final class WorkspaceService {
   }
 
   private func pruneDeadWindows() {
+    guard !isWindowIdentityStabilizing else {
+      return
+    }
+
     let liveWindows = manageableWindowsOnManagedDisplays
     let liveWindowsByKey = Dictionary(uniqueKeysWithValues: liveWindows.map { ($0.key, $0) })
 
@@ -984,7 +1013,11 @@ final class WorkspaceService {
   }
 
   private func restorePersistedWorkspaceMappingIfNeeded() {
-    guard !pendingPersistedWorkspaceWindowKeys.isEmpty || !pendingPersistedSavedFrames.isEmpty else {
+    guard
+      !pendingPersistedWorkspaceWindowKeys.isEmpty
+        || !pendingPersistedSavedFrames.isEmpty
+        || !pendingPersistedWindowIdentities.isEmpty
+    else {
       return
     }
     guard enabled else { return }
@@ -1003,6 +1036,7 @@ final class WorkspaceService {
         guard
           let window = restoredWindow(
             forPersistedKey: persistedKey,
+            identity: pendingPersistedWindowIdentities[persistedKey],
             liveWindowsByKey: liveWindowsByKey,
             liveWindows: liveWindows,
             assignedWindowKeys: assignedWindowKeys
@@ -1042,18 +1076,30 @@ final class WorkspaceService {
     }
     pendingPersistedWorkspaceWindowKeys = [:]
     pendingPersistedSavedFrames = [:]
+    pendingPersistedWindowIdentities = [:]
 
     _ = reconcileVisibility()
   }
 
   private func restoredWindow(
     forPersistedKey persistedKey: WindowKey,
+    identity: PersistedWindowIdentity?,
     liveWindowsByKey: [WindowKey: ManagedWindowRef],
     liveWindows: [ManagedWindowRef],
     assignedWindowKeys: Set<WindowKey>
   ) -> ManagedWindowRef? {
     if let window = liveWindowsByKey[persistedKey],
       !assignedWindowKeys.contains(window.key)
+    {
+      return window
+    }
+
+    if let identity,
+      let window = window(
+        matching: identity,
+        in: liveWindows,
+        excluding: assignedWindowKeys
+      )
     {
       return window
     }
@@ -1066,6 +1112,77 @@ final class WorkspaceService {
       !assignedWindowKeys.contains(window.key)
         && window.processIdentifier == persistedProcessIdentifier
         && Self.processIdentifier(fromFallbackWindowKey: window.key) != nil
+    }
+
+    return candidates.count == 1 ? candidates[0] : nil
+  }
+
+  private func reconcileKnownWindowsWithLiveWindows(_ liveWindows: [ManagedWindowRef]) {
+    let liveWindowsByKey = Dictionary(uniqueKeysWithValues: liveWindows.map { ($0.key, $0) })
+    var usedLiveWindowKeys = Set(allManagedWindows.compactMap { window in
+      liveWindowsByKey[window.key]?.key
+    })
+
+    var keyReplacements: [WindowKey: WindowKey] = [:]
+
+    for workspaceName in workspaceNames {
+      let windows = workspaceWindows[workspaceName, default: []]
+      var reconciledWindows: [ManagedWindowRef] = []
+
+      for window in windows {
+        if let liveWindow = liveWindowsByKey[window.key] {
+          reconciledWindows.append(liveWindow)
+          continue
+        }
+
+        let identity = PersistedWindowIdentity(window)
+        guard
+          let replacement = self.window(
+            matching: identity,
+            in: liveWindows,
+            excluding: usedLiveWindowKeys
+          )
+        else {
+          reconciledWindows.append(window)
+          continue
+        }
+
+        usedLiveWindowKeys.insert(replacement.key)
+        keyReplacements[window.key] = replacement.key
+        reconciledWindows.append(replacement)
+        if let savedFrame = savedFrames.removeValue(forKey: window.key) {
+          savedFrames[replacement.key] = savedFrame
+        }
+      }
+
+      workspaceWindows[workspaceName] = reconciledWindows
+    }
+
+    guard !keyReplacements.isEmpty else { return }
+
+    for (displayRole, windowKey) in lastFocusedManagedWindowKeyByDisplay {
+      guard let replacementKey = keyReplacements[windowKey] else { continue }
+      lastFocusedManagedWindowKeyByDisplay[displayRole] = replacementKey
+    }
+  }
+
+  private func window(
+    matching identity: PersistedWindowIdentity,
+    in windows: [ManagedWindowRef],
+    excluding excludedKeys: Set<WindowKey>
+  ) -> ManagedWindowRef? {
+    let candidates = windows.filter { window in
+      guard !excludedKeys.contains(window.key) else { return false }
+      return identity.matches(window)
+    }
+
+    if let processIdentifier = identity.processIdentifier {
+      let sameProcessCandidates = candidates.filter {
+        $0.processIdentifier == pid_t(processIdentifier)
+      }
+      if sameProcessCandidates.count == 1 {
+        return sameProcessCandidates[0]
+      }
     }
 
     return candidates.count == 1 ? candidates[0] : nil
@@ -1086,8 +1203,15 @@ final class WorkspaceService {
     guard !workspaceNames.isEmpty else { return }
     guard driver.isAccessibilityGranted() else { return }
 
+    let liveWindows = manageableWindowsOnManagedDisplays
+    reconcileKnownWindowsWithLiveWindows(liveWindows)
+
     let knownKeys = Set(allManagedWindows.map(\.key))
-    for window in manageableWindowsOnManagedDisplays where !knownKeys.contains(window.key) {
+    guard !isWindowIdentityStabilizing else {
+      return
+    }
+
+    for window in liveWindows where !knownKeys.contains(window.key) {
       guard let displayRole = displayRole(for: window),
         let activeWorkspaceName = activeWorkspaceName(for: displayRole)
       else {
@@ -1153,6 +1277,25 @@ final class WorkspaceService {
         self?.ignoredDesktopActivationProcessIdentifier = nil
       }
     }
+  }
+
+  private var isWindowIdentityStabilizing: Bool {
+    guard let windowIdentityStabilizationEndsAt else {
+      return false
+    }
+
+    if Date() < windowIdentityStabilizationEndsAt {
+      return true
+    }
+
+    self.windowIdentityStabilizationEndsAt = nil
+    return false
+  }
+
+  private func clearWindowIdentityStabilizationIfExpired() {
+    guard let windowIdentityStabilizationEndsAt else { return }
+    guard Date() >= windowIdentityStabilizationEndsAt else { return }
+    self.windowIdentityStabilizationEndsAt = nil
   }
 
   private func restoreFocusAfterClosedWindowIfPossible(on displayRole: WorkspaceDisplayRole) {
@@ -1437,5 +1580,45 @@ private extension CGRect {
   var area: CGFloat {
     guard !isNull, !isEmpty else { return 0 }
     return width * height
+  }
+}
+
+private extension PersistedWindowIdentity {
+  init(_ window: ManagedWindowRef) {
+    self.init(
+      processIdentifier: window.processIdentifier.map { Int32($0) },
+      bundleIdentifier: Self.normalized(window.bundleIdentifier),
+      appName: Self.normalized(window.appName),
+      title: Self.normalized(window.title)
+    )
+  }
+
+  func matches(_ window: ManagedWindowRef) -> Bool {
+    if let bundleIdentifier {
+      return bundleIdentifier == Self.normalized(window.bundleIdentifier)
+        && titleMatches(window)
+    }
+
+    if let appName {
+      return appName == Self.normalized(window.appName)
+        && titleMatches(window)
+    }
+
+    if let title {
+      return title == Self.normalized(window.title)
+    }
+
+    guard let processIdentifier else { return false }
+    return window.processIdentifier == pid_t(processIdentifier)
+  }
+
+  private func titleMatches(_ window: ManagedWindowRef) -> Bool {
+    guard let title else { return true }
+    return title == Self.normalized(window.title)
+  }
+
+  private static func normalized(_ value: String?) -> String? {
+    let trimmedValue = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    return trimmedValue.isEmpty ? nil : trimmedValue
   }
 }

@@ -89,6 +89,10 @@ struct AppBootstrap {
       [weak workspaceService] in
       workspaceService?.handleObservedWindowDestroyed()
     }
+    workspaceFocusObserverService.onSystemDidWake = {
+      [weak workspaceService] in
+      workspaceService?.handleSystemDidWake()
+    }
     workspaceFocusObserverService.start()
 
     hotKeyService.onHotKeyPressed = {

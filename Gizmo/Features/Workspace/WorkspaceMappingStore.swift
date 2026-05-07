@@ -33,13 +33,21 @@ struct PersistedWindowFrame: Codable, Equatable {
   }
 }
 
+struct PersistedWindowIdentity: Codable, Equatable {
+  var processIdentifier: Int32?
+  var bundleIdentifier: String?
+  var appName: String?
+  var title: String?
+}
+
 struct WorkspaceMappingSnapshot: Codable, Equatable {
-  static let currentVersion = 2
+  static let currentVersion = 3
 
   var version: Int
   var activeWorkspaceNamesByDisplay: [String: String]
   var workspaceWindows: [String: [WindowKey]]
   var savedFrames: [WindowKey: PersistedWindowFrame]
+  var windowIdentities: [WindowKey: PersistedWindowIdentity]
 
   private enum CodingKeys: String, CodingKey {
     case version
@@ -47,18 +55,21 @@ struct WorkspaceMappingSnapshot: Codable, Equatable {
     case activeWorkspaceNamesByDisplay
     case workspaceWindows
     case savedFrames
+    case windowIdentities
   }
 
   init(
     version: Int = currentVersion,
     activeWorkspaceNamesByDisplay: [String: String] = [:],
     workspaceWindows: [String: [WindowKey]],
-    savedFrames: [WindowKey: PersistedWindowFrame] = [:]
+    savedFrames: [WindowKey: PersistedWindowFrame] = [:],
+    windowIdentities: [WindowKey: PersistedWindowIdentity] = [:]
   ) {
     self.version = version
     self.activeWorkspaceNamesByDisplay = activeWorkspaceNamesByDisplay
     self.workspaceWindows = workspaceWindows
     self.savedFrames = savedFrames
+    self.windowIdentities = windowIdentities
   }
 
   init(from decoder: any Decoder) throws {
@@ -71,6 +82,10 @@ struct WorkspaceMappingSnapshot: Codable, Equatable {
     savedFrames = try container.decodeIfPresent(
       [WindowKey: PersistedWindowFrame].self,
       forKey: .savedFrames
+    ) ?? [:]
+    windowIdentities = try container.decodeIfPresent(
+      [WindowKey: PersistedWindowIdentity].self,
+      forKey: .windowIdentities
     ) ?? [:]
 
     if version == 1 {
@@ -89,6 +104,9 @@ struct WorkspaceMappingSnapshot: Codable, Equatable {
       [String: String].self,
       forKey: .activeWorkspaceNamesByDisplay
     ) ?? [:]
+    if version == 2 {
+      version = Self.currentVersion
+    }
   }
 
   func encode(to encoder: any Encoder) throws {
@@ -97,6 +115,7 @@ struct WorkspaceMappingSnapshot: Codable, Equatable {
     try container.encode(activeWorkspaceNamesByDisplay, forKey: .activeWorkspaceNamesByDisplay)
     try container.encode(workspaceWindows, forKey: .workspaceWindows)
     try container.encode(savedFrames, forKey: .savedFrames)
+    try container.encode(windowIdentities, forKey: .windowIdentities)
   }
 }
 
