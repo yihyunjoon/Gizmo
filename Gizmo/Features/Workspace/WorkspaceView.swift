@@ -1,5 +1,5 @@
-import CoreGraphics
 import Combine
+import CoreGraphics
 import SwiftUI
 
 struct WorkspaceView: View {
@@ -73,17 +73,17 @@ struct WorkspaceView: View {
         ForEach(snapshot.state.workspaceNames, id: \.self) { workspaceName in
           let keys = snapshot.workspaceWindows[workspaceName, default: []]
           VStack(alignment: .leading, spacing: 6) {
-            Text("\(workspaceName) (\(keys.count))")
-              .font(.system(size: 13, weight: .semibold, design: .rounded))
+            Text(workspaceName.uppercased())
+              .font(.system(size: 14, weight: .semibold, design: .rounded))
 
             if keys.isEmpty {
               Text(String(localized: "No managed windows in this workspace."))
-                .font(.footnote)
+                .font(.system(size: 12))
                 .foregroundStyle(.secondary)
             } else {
               ForEach(keys, id: \.self) { windowKey in
                 Text(windowDisplayName(for: windowKey))
-                  .font(.footnote)
+                  .font(.system(size: 12))
                   .foregroundStyle(.secondary)
               }
             }
@@ -95,16 +95,16 @@ struct WorkspaceView: View {
 
         VStack(alignment: .leading, spacing: 6) {
           Text("\(String(localized: "Unmanaged Windows")) (\(snapshot.unmanagedWindowKeys.count))")
-            .font(.system(size: 13, weight: .semibold, design: .rounded))
+            .font(.system(size: 14, weight: .semibold, design: .rounded))
 
           if snapshot.unmanagedWindowKeys.isEmpty {
             Text(String(localized: "No unmanaged windows."))
-              .font(.footnote)
+              .font(.system(size: 12))
               .foregroundStyle(.secondary)
           } else {
             ForEach(snapshot.unmanagedWindowKeys, id: \.self) { windowKey in
               Text(windowDisplayName(for: windowKey))
-                .font(.footnote)
+                .font(.system(size: 12))
                 .foregroundStyle(.secondary)
             }
           }
@@ -169,7 +169,7 @@ struct WorkspaceView: View {
     }
 
     if !catalogEntry.title.isEmpty {
-      return "\(catalogEntry.ownerName) - \(catalogEntry.title)"
+      return "\(catalogEntry.ownerName) · \(catalogEntry.title)"
     }
 
     return "\(catalogEntry.ownerName) (#\(catalogEntry.windowNumber))"
