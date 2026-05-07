@@ -422,6 +422,7 @@ final class VirtualWorkspaceService {
   private var lastPersistedWorkspaceSnapshot: WorkspaceMappingSnapshot?
   private var lastFocusedManagedWindowKeyByDisplay: [WorkspaceDisplayRole: WindowKey]
   private var lastFocusedManagedWindowWorkspaceNameByDisplay: [WorkspaceDisplayRole: String]
+  private var ignoredDesktopActivationProcessIdentifier: pid_t?
 
   var onStateDidChange: ((VirtualWorkspaceState) -> Void)?
 
@@ -610,6 +611,9 @@ final class VirtualWorkspaceService {
       restoreFocusForClosedManagedWindowIfNeeded()
       return
     }
+    if shouldIgnoreDesktopActivation(processIdentifier: focusedWindow.processIdentifier) {
+      return
+    }
     if isSpecialWindow(focusedWindow) {
       return
     }
@@ -663,6 +667,9 @@ final class VirtualWorkspaceService {
     guard driver.isAccessibilityGranted() else { return }
     guard let processIdentifier else { return }
     guard processIdentifier != ProcessInfo.processInfo.processIdentifier else { return }
+    if shouldIgnoreDesktopActivation(processIdentifier: processIdentifier) {
+      return
+    }
 
     synchronizeManageableWindowsToActiveWorkspace()
     pruneDeadWindows()
@@ -728,7 +735,9 @@ final class VirtualWorkspaceService {
     activeWorkspaceNamesByDisplay[displayRole] = workspaceName
     refreshCompatibilityState()
     if !preserveFocusedWindow {
-      focusPreferredWindow(in: workspaceName)
+      if !focusPreferredWindow(in: workspaceName) {
+        activateDesktop()
+      }
     }
     notifyStateDidChange()
 
@@ -1089,8 +1098,9 @@ final class VirtualWorkspaceService {
     }
   }
 
-  private func focusPreferredWindow(in workspaceName: String) {
-    focusTopmostWindow(in: workspaceName)
+  @discardableResult
+  private func focusPreferredWindow(in workspaceName: String) -> Bool {
+    focusTopmostWindow(in: workspaceName) != nil
   }
 
   @discardableResult
@@ -1105,6 +1115,44 @@ final class VirtualWorkspaceService {
     }
 
     return nil
+  }
+
+  private func activateDesktop() {
+    // An empty virtual workspace should behave like clicking the macOS desktop:
+    // Finder becomes active, but Finder windows should not be raised.
+    guard let finder = NSRunningApplication
+      .runningApplications(withBundleIdentifier: "com.apple.finder")
+      .first
+    else {
+      return
+    }
+
+    // Finder activation would normally trigger app-based workspace sync and pull us
+    // to the workspace that owns a Finder window. Suppress only this self-induced event.
+    ignoredDesktopActivationProcessIdentifier = finder.processIdentifier
+    finder.activate(options: [])
+    clearIgnoredDesktopActivationSoon(processIdentifier: finder.processIdentifier)
+  }
+
+  private func shouldIgnoreDesktopActivation(processIdentifier: pid_t?) -> Bool {
+    guard let processIdentifier,
+      ignoredDesktopActivationProcessIdentifier == processIdentifier
+    else {
+      return false
+    }
+
+    return true
+  }
+
+  private func clearIgnoredDesktopActivationSoon(processIdentifier: pid_t) {
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+      Task { @MainActor [weak self] in
+        guard self?.ignoredDesktopActivationProcessIdentifier == processIdentifier else {
+          return
+        }
+        self?.ignoredDesktopActivationProcessIdentifier = nil
+      }
+    }
   }
 
   private func restoreFocusAfterClosedWindowIfPossible(on displayRole: WorkspaceDisplayRole) {
