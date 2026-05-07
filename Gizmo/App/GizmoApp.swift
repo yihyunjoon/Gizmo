@@ -36,7 +36,7 @@ struct GizmoApp: App {
         .environment(appEnvironment.monitorService)
         .environment(bootstrap.accessibilityPermissionService)
         .environment(bootstrap.windowManagerService)
-        .environment(bootstrap.virtualWorkspaceService)
+        .environment(bootstrap.workspaceService)
         .environment(bootstrap.commandShortcutService)
         .environment(bootstrap.clipboardHistoryService)
         .environment(bootstrap.launchAtLoginService)
@@ -57,7 +57,7 @@ struct GizmoApp: App {
           )
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
-          bootstrap.virtualWorkspaceService.restoreAllWindows()
+          bootstrap.workspaceService.restoreAllWindows()
           bootstrap.commandShortcutService.stop()
           bootstrap.workspaceFocusObserverService.stop()
           bootstrap.customMenubarRuntimeService.stop()

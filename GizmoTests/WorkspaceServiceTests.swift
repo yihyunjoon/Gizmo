@@ -4,7 +4,7 @@ import XCTest
 @testable import Gizmo
 
 @MainActor
-final class VirtualWorkspaceServiceTests: XCTestCase {
+final class WorkspaceServiceTests: XCTestCase {
   func testClosedFocusedWindowRestoresTopmostWindowInSameWorkspace() {
     let window1 = makeWindow(key: "axwn:100")
     let window2 = makeWindow(key: "axwn:200")
@@ -19,7 +19,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
       ],
       visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080)
     )
-    let service = VirtualWorkspaceService(
+    let service = WorkspaceService(
       driver: driver,
       initialConfig: makeWorkspaceConfig(),
       workspaceMappingStore: MockWorkspaceMappingStore()
@@ -59,7 +59,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
       ],
       visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080)
     )
-    let service = VirtualWorkspaceService(
+    let service = WorkspaceService(
       driver: driver,
       initialConfig: makeWorkspaceConfig(),
       workspaceMappingStore: MockWorkspaceMappingStore()
@@ -95,7 +95,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
       ],
       visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080)
     )
-    let service = VirtualWorkspaceService(
+    let service = WorkspaceService(
       driver: driver,
       initialConfig: makeWorkspaceConfig(),
       workspaceMappingStore: MockWorkspaceMappingStore()
@@ -129,7 +129,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
       ],
       visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080)
     )
-    let service = VirtualWorkspaceService(
+    let service = WorkspaceService(
       driver: driver,
       initialConfig: makeWorkspaceConfig(),
       workspaceMappingStore: MockWorkspaceMappingStore()
@@ -165,7 +165,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
       ],
       visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080)
     )
-    let service = VirtualWorkspaceService(
+    let service = WorkspaceService(
       driver: driver,
       initialConfig: makeWorkspaceConfig(),
       workspaceMappingStore: MockWorkspaceMappingStore()
@@ -199,7 +199,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
       ],
       visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080)
     )
-    let service = VirtualWorkspaceService(
+    let service = WorkspaceService(
       driver: driver,
       initialConfig: makeWorkspaceConfig(),
       workspaceMappingStore: MockWorkspaceMappingStore()
@@ -235,7 +235,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
       ],
       visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080)
     )
-    let service = VirtualWorkspaceService(
+    let service = WorkspaceService(
       driver: driver,
       initialConfig: makeWorkspaceConfig(),
       workspaceMappingStore: MockWorkspaceMappingStore()
@@ -268,7 +268,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
       ],
       visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080)
     )
-    let service = VirtualWorkspaceService(
+    let service = WorkspaceService(
       driver: driver,
       initialConfig: makeWorkspaceConfig(),
       workspaceMappingStore: MockWorkspaceMappingStore()
@@ -302,7 +302,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
       ],
       visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080)
     )
-    let service = VirtualWorkspaceService(
+    let service = WorkspaceService(
       driver: driver,
       initialConfig: makeWorkspaceConfig(),
       workspaceMappingStore: MockWorkspaceMappingStore()
@@ -333,7 +333,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
       ],
       visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080)
     )
-    let service = VirtualWorkspaceService(
+    let service = WorkspaceService(
       driver: driver,
       initialConfig: makeWorkspaceConfig(),
       workspaceMappingStore: MockWorkspaceMappingStore()
@@ -376,7 +376,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
       )
     )
 
-    let service = VirtualWorkspaceService(
+    let service = WorkspaceService(
       driver: driver,
       initialConfig: makeWorkspaceConfig(),
       workspaceMappingStore: store
@@ -400,7 +400,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
       ],
       visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080)
     )
-    let service = VirtualWorkspaceService(
+    let service = WorkspaceService(
       driver: driver,
       initialConfig: makeWorkspaceConfig(),
       workspaceMappingStore: MockWorkspaceMappingStore()
@@ -455,7 +455,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
       )
     )
 
-    _ = VirtualWorkspaceService(
+    _ = WorkspaceService(
       driver: driver,
       initialConfig: makeWorkspaceConfig(),
       workspaceMappingStore: store
@@ -480,7 +480,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
       )
     )
 
-    let service = VirtualWorkspaceService(
+    let service = WorkspaceService(
       driver: driver,
       initialConfig: makeWorkspaceConfig(),
       workspaceMappingStore: store
@@ -505,7 +505,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
       )
     )
 
-    let service = VirtualWorkspaceService(
+    let service = WorkspaceService(
       driver: driver,
       initialConfig: makeWorkspaceConfig(),
       workspaceMappingStore: store
@@ -542,7 +542,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
       )
     )
 
-    let service = VirtualWorkspaceService(
+    let service = WorkspaceService(
       driver: driver,
       initialConfig: makeWorkspaceConfig(),
       workspaceMappingStore: store
@@ -575,7 +575,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
     )
     let store = MockWorkspaceMappingStore()
 
-    let service = VirtualWorkspaceService(
+    let service = WorkspaceService(
       driver: driver,
       initialConfig: makeWorkspaceConfig(),
       workspaceMappingStore: store
@@ -619,7 +619,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
     )
     let store = MockWorkspaceMappingStore()
 
-    let service = VirtualWorkspaceService(
+    let service = WorkspaceService(
       driver: driver,
       initialConfig: makeWorkspaceConfig(),
       workspaceMappingStore: store
@@ -650,7 +650,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
       ],
       visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080)
     )
-    let service = VirtualWorkspaceService(
+    let service = WorkspaceService(
       driver: driver,
       initialConfig: makeWorkspaceConfig(),
       workspaceMappingStore: MockWorkspaceMappingStore()
@@ -679,7 +679,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
       ],
       visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080)
     )
-    let service = VirtualWorkspaceService(
+    let service = WorkspaceService(
       driver: driver,
       initialConfig: makeWorkspaceConfig(),
       workspaceMappingStore: MockWorkspaceMappingStore()

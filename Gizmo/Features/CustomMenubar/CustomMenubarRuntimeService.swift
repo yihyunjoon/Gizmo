@@ -14,7 +14,7 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
 
   private var modelsByDisplayRole: [WorkspaceDisplayRole: CustomMenubarModel] = [:]
   private var onWorkspaceSelection: ((String) -> Void)?
-  private var workspaceState = VirtualWorkspaceState(
+  private var workspaceState = WorkspaceState(
     enabled: WorkspaceConfig.default.enabled,
     workspaceNames: WorkspaceConfig.default.primaryNames,
     activeWorkspaceName: WorkspaceConfig.default.primaryNames.first ?? WorkspaceConfig.defaultNames[0],
@@ -78,7 +78,7 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
     reconcileWindows()
   }
 
-  func updateWorkspaceState(_ state: VirtualWorkspaceState) {
+  func updateWorkspaceState(_ state: WorkspaceState) {
     workspaceState = state
     reconcileModels()
 

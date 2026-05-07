@@ -76,7 +76,7 @@ enum WorkspaceError: Error, Equatable, LocalizedError {
   }
 }
 
-struct VirtualWorkspaceState: Equatable {
+struct WorkspaceState: Equatable {
   let enabled: Bool
   let workspaceNames: [String]
   let activeWorkspaceName: String
@@ -91,8 +91,8 @@ struct WorkspaceDisplayState: Equatable {
   let appNamesByWorkspace: [String: [String]]
 }
 
-struct VirtualWorkspaceDebugSnapshot: Equatable {
-  let state: VirtualWorkspaceState
+struct WorkspaceDebugSnapshot: Equatable {
+  let state: WorkspaceState
   let workspaceWindows: [String: [WindowKey]]
   let unmanagedWindowKeys: [WindowKey]
   let windowDisplayNames: [WindowKey: String]
@@ -404,7 +404,7 @@ final class LiveWorkspaceWindowDriver: WorkspaceWindowDriver {
 
 @Observable
 @MainActor
-final class VirtualWorkspaceService {
+final class WorkspaceService {
   private let driver: any WorkspaceWindowDriver
   private let workspaceMappingStore: any WorkspaceMappingStore
 
@@ -424,7 +424,7 @@ final class VirtualWorkspaceService {
   private var lastFocusedManagedWindowWorkspaceNameByDisplay: [WorkspaceDisplayRole: String]
   private var ignoredDesktopActivationProcessIdentifier: pid_t?
 
-  var onStateDidChange: ((VirtualWorkspaceState) -> Void)?
+  var onStateDidChange: ((WorkspaceState) -> Void)?
 
   convenience init(
     permissionService: AccessibilityPermissionService,
@@ -488,8 +488,8 @@ final class VirtualWorkspaceService {
     refreshCompatibilityState()
   }
 
-  var state: VirtualWorkspaceState {
-    VirtualWorkspaceState(
+  var state: WorkspaceState {
+    WorkspaceState(
       enabled: enabled,
       workspaceNames: workspaceNames,
       activeWorkspaceName: activeWorkspaceName,
@@ -498,7 +498,7 @@ final class VirtualWorkspaceService {
     )
   }
 
-  func debugSnapshot() -> VirtualWorkspaceDebugSnapshot {
+  func debugSnapshot() -> WorkspaceDebugSnapshot {
     let mappedWorkspaceWindows = Dictionary(
       uniqueKeysWithValues: workspaceNames.map { workspaceName in
         (
@@ -519,7 +519,7 @@ final class VirtualWorkspaceService {
       windowDisplayNames[window.key] = window.displayName
     }
 
-    return VirtualWorkspaceDebugSnapshot(
+    return WorkspaceDebugSnapshot(
       state: state,
       workspaceWindows: mappedWorkspaceWindows,
       unmanagedWindowKeys: unmanagedWindows.map(\.key),

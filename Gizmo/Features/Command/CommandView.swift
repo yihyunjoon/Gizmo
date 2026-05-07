@@ -284,7 +284,7 @@ struct CommandView: View {
         windowManagerService: WindowManagerService(
           permissionService: AccessibilityPermissionService()
         ),
-        virtualWorkspaceService: VirtualWorkspaceService(
+        workspaceService: WorkspaceService(
           permissionService: AccessibilityPermissionService(),
           initialConfig: .default
         ),

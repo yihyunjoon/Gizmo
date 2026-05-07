@@ -14,14 +14,14 @@ struct WorkspaceView: View {
 
   @Environment(AccessibilityPermissionService.self)
   private var accessibilityPermissionService
-  @Environment(VirtualWorkspaceService.self)
+  @Environment(WorkspaceService.self)
   private var workspaceService
 
   @State private var windowCatalog: [Int: WindowCatalogEntry] = [:]
 
   private let refreshTimer = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
 
-  private var snapshot: VirtualWorkspaceDebugSnapshot {
+  private var snapshot: WorkspaceDebugSnapshot {
     workspaceService.debugSnapshot()
   }
 
@@ -210,7 +210,7 @@ struct WorkspaceView: View {
     .environment(ConfigStore())
     .environment(AccessibilityPermissionService())
     .environment(
-      VirtualWorkspaceService(
+      WorkspaceService(
         permissionService: AccessibilityPermissionService(),
         initialConfig: .default
       )

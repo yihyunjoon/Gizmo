@@ -7,7 +7,7 @@ import Observation
 @MainActor
 final class CommandShortcutService {
   private let windowManagerService: WindowManagerService
-  private let virtualWorkspaceService: VirtualWorkspaceService
+  private let workspaceService: WorkspaceService
   private let fileManager: FileManager
 
   private(set) var commands: [LauncherCommand]
@@ -17,13 +17,13 @@ final class CommandShortcutService {
 
   init(
     windowManagerService: WindowManagerService,
-    virtualWorkspaceService: VirtualWorkspaceService,
+    workspaceService: WorkspaceService,
     initialWorkspaceNames: [String],
     initialApplicationTargets: [LauncherApplicationTarget] = [],
     fileManager: FileManager = .default
   ) {
     self.windowManagerService = windowManagerService
-    self.virtualWorkspaceService = virtualWorkspaceService
+    self.workspaceService = workspaceService
     self.workspaceNames = initialWorkspaceNames
     self.applicationTargets = initialApplicationTargets
     self.fileManager = fileManager
@@ -71,15 +71,15 @@ final class CommandShortcutService {
       )
     case .workspaceFocus(let workspaceName):
       return mapWorkspaceResult(
-        virtualWorkspaceService.focusWorkspace(workspaceName)
+        workspaceService.focusWorkspace(workspaceName)
       )
     case .workspaceBackAndForth:
       return mapWorkspaceResult(
-        virtualWorkspaceService.focusPreviousWorkspace()
+        workspaceService.focusPreviousWorkspace()
       )
     case .moveFocusedWindowToWorkspace(let workspaceName):
       return mapWorkspaceResult(
-        virtualWorkspaceService.moveFocusedWindowToWorkspace(
+        workspaceService.moveFocusedWindowToWorkspace(
           workspaceName,
           preferredWindowElement: preferredWindowElement
         )
