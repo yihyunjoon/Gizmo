@@ -7,17 +7,20 @@ typealias WindowKey = String
 struct ManagedWindowRef: Hashable {
   let key: WindowKey
   let element: AXUIElement?
+  let processIdentifier: pid_t?
   let appName: String?
   let title: String?
 
   init(
     key: WindowKey,
     element: AXUIElement?,
+    processIdentifier: pid_t? = nil,
     appName: String? = nil,
     title: String? = nil
   ) {
     self.key = key
     self.element = element
+    self.processIdentifier = processIdentifier
     self.appName = appName
     self.title = title
   }
@@ -320,6 +323,7 @@ final class LiveWorkspaceWindowDriver: WorkspaceWindowDriver {
     ManagedWindowRef(
       key: windowKey(for: element),
       element: element,
+      processIdentifier: processIdentifier(for: element),
       appName: appName(for: element),
       title: title(for: element)
     )
@@ -349,10 +353,13 @@ final class LiveWorkspaceWindowDriver: WorkspaceWindowDriver {
   }
 
   private func belongsToCurrentProcess(_ window: ManagedWindowRef) -> Bool {
-    guard let element = window.element else { return false }
+    window.processIdentifier == ProcessInfo.processInfo.processIdentifier
+  }
+
+  private func processIdentifier(for element: AXUIElement) -> pid_t? {
     var pid: pid_t = 0
-    guard AXUIElementGetPid(element, &pid) == .success else { return false }
-    return pid == ProcessInfo.processInfo.processIdentifier
+    guard AXUIElementGetPid(element, &pid) == .success else { return nil }
+    return pid
   }
 
   private func bundleIdentifier(for element: AXUIElement) -> String? {
@@ -641,6 +648,27 @@ final class VirtualWorkspaceService {
     )
   }
 
+  func synchronizeActiveWorkspaceToApplicationIfNeeded(processIdentifier: pid_t?) {
+    guard enabled else { return }
+    guard !workspaceNames.isEmpty else { return }
+    guard driver.isAccessibilityGranted() else { return }
+    guard let processIdentifier else { return }
+    guard processIdentifier != ProcessInfo.processInfo.processIdentifier else { return }
+
+    synchronizeManageableWindowsToActiveWorkspace()
+    pruneDeadWindows()
+
+    guard let targetWorkspaceName = workspaceName(containingWindowForProcessIdentifier: processIdentifier),
+      let displayRole = workspaceRole(for: targetWorkspaceName),
+      let activeWorkspaceName = activeWorkspaceName(for: displayRole)
+    else {
+      return
+    }
+    guard targetWorkspaceName != activeWorkspaceName else { return }
+
+    _ = focusWorkspace(targetWorkspaceName)
+  }
+
   func handleObservedWindowDestroyed() {
     guard enabled else { return }
     guard !workspaceNames.isEmpty else { return }
@@ -803,6 +831,25 @@ final class VirtualWorkspaceService {
     return nil
   }
 
+  private func workspaceName(containingWindowForProcessIdentifier processIdentifier: pid_t) -> String? {
+    let currentActiveWorkspaceName = activeWorkspaceName
+    if workspaceWindows[currentActiveWorkspaceName, default: []].contains(where: {
+        $0.processIdentifier == processIdentifier
+      })
+    {
+      return currentActiveWorkspaceName
+    }
+
+    for workspaceName in workspaceNames {
+      let windows = workspaceWindows[workspaceName, default: []]
+      if windows.contains(where: { $0.processIdentifier == processIdentifier }) {
+        return workspaceName
+      }
+    }
+
+    return nil
+  }
+
   private var workspaceWindowKeysMapping: [String: [WindowKey]] {
     Dictionary(
       uniqueKeysWithValues: workspaceNames.map { workspaceName in
@@ -931,12 +978,23 @@ final class VirtualWorkspaceService {
     let liveWindows = manageableWindowsOnManagedDisplays
     let liveWindowsByKey = Dictionary(uniqueKeysWithValues: liveWindows.map { ($0.key, $0) })
     var assignedWindowKeys: Set<WindowKey> = []
+    var liveWindowKeysByPersistedKey: [WindowKey: WindowKey] = [:]
 
     for workspaceName in workspaceNames {
-      for key in pendingPersistedWorkspaceWindowKeys[workspaceName, default: []] {
-        guard let window = liveWindowsByKey[key] else { continue }
+      for persistedKey in pendingPersistedWorkspaceWindowKeys[workspaceName, default: []] {
+        guard
+          let window = restoredWindow(
+            forPersistedKey: persistedKey,
+            liveWindowsByKey: liveWindowsByKey,
+            liveWindows: liveWindows,
+            assignedWindowKeys: assignedWindowKeys
+          )
+        else {
+          continue
+        }
         guard workspaceRole(for: workspaceName) == displayRole(for: window) else { continue }
-        guard assignedWindowKeys.insert(key).inserted else { continue }
+        guard assignedWindowKeys.insert(window.key).inserted else { continue }
+        liveWindowKeysByPersistedKey[persistedKey] = window.key
         Self.appendUnique(window, to: &restoredWorkspaceWindows[workspaceName, default: []])
       }
     }
@@ -952,7 +1010,7 @@ final class VirtualWorkspaceService {
 
     workspaceWindows = restoredWorkspaceWindows
     savedFrames = pendingPersistedSavedFrames.reduce(into: [WindowKey: CGRect]()) { partialResult, entry in
-      let windowKey = entry.key
+      let windowKey = liveWindowKeysByPersistedKey[entry.key] ?? entry.key
       guard liveWindowsByKey[windowKey] != nil else { return }
       guard let workspaceName = workspaceName(for: windowKey),
         let displayRole = workspaceRole(for: workspaceName),
@@ -968,6 +1026,31 @@ final class VirtualWorkspaceService {
     pendingPersistedSavedFrames = [:]
 
     _ = reconcileVisibility()
+  }
+
+  private func restoredWindow(
+    forPersistedKey persistedKey: WindowKey,
+    liveWindowsByKey: [WindowKey: ManagedWindowRef],
+    liveWindows: [ManagedWindowRef],
+    assignedWindowKeys: Set<WindowKey>
+  ) -> ManagedWindowRef? {
+    if let window = liveWindowsByKey[persistedKey],
+      !assignedWindowKeys.contains(window.key)
+    {
+      return window
+    }
+
+    guard let persistedProcessIdentifier = Self.processIdentifier(fromFallbackWindowKey: persistedKey) else {
+      return nil
+    }
+
+    let candidates = liveWindows.filter { window in
+      !assignedWindowKeys.contains(window.key)
+        && window.processIdentifier == persistedProcessIdentifier
+        && Self.processIdentifier(fromFallbackWindowKey: window.key) != nil
+    }
+
+    return candidates.count == 1 ? candidates[0] : nil
   }
 
   private func persistWorkspaceSnapshotIfNeeded() {
@@ -1248,6 +1331,17 @@ final class VirtualWorkspaceService {
     }
 
     return normalized.isEmpty ? fallback : normalized
+  }
+
+  private static func processIdentifier(fromFallbackWindowKey key: WindowKey) -> pid_t? {
+    guard key.hasPrefix("axel:") else { return nil }
+
+    let parts = key.split(separator: ":")
+    guard parts.count == 3, let processIdentifier = Int32(String(parts[1])) else {
+      return nil
+    }
+
+    return pid_t(processIdentifier)
   }
 
   private static func hiddenFrame(for frame: CGRect, in visibleFrame: CGRect) -> CGRect {

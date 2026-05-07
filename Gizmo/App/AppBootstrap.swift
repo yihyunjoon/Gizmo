@@ -79,6 +79,12 @@ struct AppBootstrap {
       [weak virtualWorkspaceService] in
       virtualWorkspaceService?.synchronizeActiveWorkspaceToFocusedWindowIfNeeded()
     }
+    workspaceFocusObserverService.onActiveApplicationChanged = {
+      [weak virtualWorkspaceService] processIdentifier in
+      virtualWorkspaceService?.synchronizeActiveWorkspaceToApplicationIfNeeded(
+        processIdentifier: processIdentifier
+      )
+    }
     workspaceFocusObserverService.onObservedWindowDestroyed = {
       [weak virtualWorkspaceService] in
       virtualWorkspaceService?.handleObservedWindowDestroyed()

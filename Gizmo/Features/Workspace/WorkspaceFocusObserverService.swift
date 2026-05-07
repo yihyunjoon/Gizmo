@@ -4,6 +4,7 @@ import ApplicationServices
 @MainActor
 final class WorkspaceFocusObserverService {
   var onFocusedWindowChanged: (() -> Void)?
+  var onActiveApplicationChanged: ((pid_t) -> Void)?
   var onObservedWindowDestroyed: (() -> Void)?
 
   private let permissionService: AccessibilityPermissionService
@@ -71,6 +72,9 @@ final class WorkspaceFocusObserverService {
     guard isRunning else { return }
 
     refreshObserver(for: processIdentifier)
+    if let processIdentifier {
+      onActiveApplicationChanged?(processIdentifier)
+    }
     scheduleFocusChange()
   }
 

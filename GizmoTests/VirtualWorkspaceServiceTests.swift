@@ -321,6 +321,71 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
     XCTAssertTrue(driver.setFrameCalls.isEmpty)
   }
 
+  func testActiveApplicationChangeSwitchesToWorkspaceContainingThatApp() {
+    let window1 = makeWindow(key: "axwn:100", processIdentifier: 100)
+    let window2 = makeWindow(key: "axwn:200", processIdentifier: 200)
+
+    let driver = MockWorkspaceWindowDriver(
+      manageableWindows: [window1, window2],
+      frames: [
+        window1.key: CGRect(x: 0, y: 0, width: 700, height: 500),
+        window2.key: CGRect(x: 20, y: 20, width: 700, height: 500),
+      ],
+      visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080)
+    )
+    let service = VirtualWorkspaceService(
+      driver: driver,
+      initialConfig: makeWorkspaceConfig(),
+      workspaceMappingStore: MockWorkspaceMappingStore()
+    )
+
+    driver.focusedWindow = window2
+    _ = service.moveFocusedWindowToWorkspace("2")
+    driver.focusedWindow = nil
+    driver.resetRecordedCalls()
+
+    service.synchronizeActiveWorkspaceToApplicationIfNeeded(processIdentifier: 200)
+
+    XCTAssertEqual(service.state.activeWorkspaceName, "2")
+    XCTAssertEqual(driver.focusCalls, [window2.key])
+  }
+
+  func testRestoresFallbackWindowKeyByProcessIdentifierWhenExactKeyChanged() {
+    let oldKey = "axel:200:111"
+    let newKey = "axel:200:222"
+    let window = makeWindow(key: newKey, processIdentifier: 200)
+    let persistedFrame = CGRect(x: 220, y: 240, width: 880, height: 660)
+
+    let driver = MockWorkspaceWindowDriver(
+      manageableWindows: [window],
+      frames: [
+        newKey: CGRect(x: 20, y: 20, width: 700, height: 500)
+      ],
+      visibleFrame: CGRect(x: 0, y: 0, width: 1920, height: 1080)
+    )
+    let store = MockWorkspaceMappingStore(
+      loadSnapshot: WorkspaceMappingSnapshot(
+        activeWorkspaceNamesByDisplay: [WorkspaceDisplayRole.primary.rawValue: "1"],
+        workspaceWindows: [
+          "1": [],
+          "2": [oldKey],
+        ],
+        savedFrames: [
+          oldKey: PersistedWindowFrame(rect: persistedFrame)
+        ]
+      )
+    )
+
+    let service = VirtualWorkspaceService(
+      driver: driver,
+      initialConfig: makeWorkspaceConfig(),
+      workspaceMappingStore: store
+    )
+
+    XCTAssertEqual(service.managedWindowKeys(in: "2"), [newKey])
+    XCTAssertTrue(service.debugSnapshot().hiddenWindowKeys.contains(newKey))
+  }
+
   func testFocusWithinWorkspaceUpdatesMRUForSubsequentRestore() {
     let window1 = makeWindow(key: "axwn:100")
     let window2 = makeWindow(key: "axwn:200")
@@ -641,10 +706,14 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
     )
   }
 
-  private func makeWindow(key: WindowKey) -> ManagedWindowRef {
+  private func makeWindow(
+    key: WindowKey,
+    processIdentifier: pid_t? = nil
+  ) -> ManagedWindowRef {
     ManagedWindowRef(
       key: key,
       element: nil,
+      processIdentifier: processIdentifier,
       appName: "Test App",
       title: key
     )
