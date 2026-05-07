@@ -21,11 +21,6 @@ struct CustomMenubarSettingsView: View {
         )
 
         LabeledContent(
-          String(localized: "Display Scope"),
-          value: String(localized: "Primary Display")
-        )
-
-        LabeledContent(
           String(localized: "Position"),
           value: configStore.active.customMenubar.position.titleText
         )

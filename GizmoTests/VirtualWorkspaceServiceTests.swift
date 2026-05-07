@@ -637,10 +637,7 @@ final class VirtualWorkspaceServiceTests: XCTestCase {
   private func makeWorkspaceConfig() -> WorkspaceConfig {
     WorkspaceConfig(
       enabled: true,
-      mode: .primaryOnly,
-      primaryNames: ["1", "2"],
-      secondaryNames: WorkspaceConfig.defaultSecondaryNames,
-      hideStrategy: .cornerOffscreen
+      primaryNames: ["1", "2"]
     )
   }
 
@@ -667,7 +664,6 @@ private final class MockWorkspaceWindowDriver: WorkspaceWindowDriver {
   var manageableWindows: [ManagedWindowRef]
   var frames: [WindowKey: CGRect]
   var primaryVisibleFrame: CGRect?
-  var secondaryVisibleFrame: CGRect?
 
   private(set) var setFrameCalls: [SetFrameCall] = []
   private(set) var focusCalls: [WindowKey] = []
@@ -675,13 +671,11 @@ private final class MockWorkspaceWindowDriver: WorkspaceWindowDriver {
   init(
     manageableWindows: [ManagedWindowRef],
     frames: [WindowKey: CGRect],
-    visibleFrame: CGRect?,
-    secondaryVisibleFrame: CGRect? = nil
+    visibleFrame: CGRect?
   ) {
     self.manageableWindows = manageableWindows
     self.frames = frames
     self.primaryVisibleFrame = visibleFrame
-    self.secondaryVisibleFrame = secondaryVisibleFrame
     self.focusedWindow = manageableWindows.first
   }
 
@@ -720,17 +714,12 @@ private final class MockWorkspaceWindowDriver: WorkspaceWindowDriver {
     frames[window.key] != nil
   }
 
-  func screenFrame(for role: WorkspaceDisplayRole) -> CGRect? {
-    switch role {
-    case .primary:
-      primaryVisibleFrame
-    case .secondary:
-      secondaryVisibleFrame
-    }
+  func screenFrame() -> CGRect? {
+    primaryVisibleFrame
   }
 
-  func visibleFrame(for role: WorkspaceDisplayRole) -> CGRect? {
-    screenFrame(for: role)
+  func visibleFrame() -> CGRect? {
+    screenFrame()
   }
 
   func resetRecordedCalls() {

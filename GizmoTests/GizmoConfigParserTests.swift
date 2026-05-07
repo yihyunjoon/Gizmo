@@ -17,7 +17,6 @@ final class GizmoConfigParserTests: XCTestCase {
       [custom_menubar]
       enabled = true
       border = false
-      display_scope = "active"
       height = 32
       widgets = ["battery"]
       background_opacity = 0.6
@@ -31,7 +30,6 @@ final class GizmoConfigParserTests: XCTestCase {
     let config = try XCTUnwrap(result.config)
     XCTAssertTrue(config.customMenubar.enabled)
     XCTAssertFalse(config.customMenubar.border)
-    XCTAssertEqual(config.customMenubar.displayScope, .active)
     XCTAssertEqual(config.customMenubar.height, 32)
     XCTAssertEqual(config.customMenubar.widgets, ["battery"])
     XCTAssertEqual(config.customMenubar.backgroundOpacity, 0.6)
@@ -44,20 +42,6 @@ final class GizmoConfigParserTests: XCTestCase {
         widgetAlignment: .center
       )
     )
-  }
-
-  func testInvalidDisplayScopeReturnsError() {
-    let result = parser.parse(
-      """
-      config-version = 1
-
-      [custom_menubar]
-      display_scope = "invalid"
-      """
-    )
-
-    XCTAssertNil(result.config)
-    XCTAssertTrue(result.errors.contains { $0.contains("custom_menubar.display_scope") })
   }
 
   func testUnknownCustomWidgetReturnsError() {
@@ -151,7 +135,6 @@ final class GizmoConfigParserTests: XCTestCase {
 
       [gaps]
       inner.horizontal = 4
-      inner.vertical = 6
       outer.left = 10
       outer.top = 11
       outer.right = 12
@@ -164,7 +147,6 @@ final class GizmoConfigParserTests: XCTestCase {
 
     let config = try XCTUnwrap(result.config)
     XCTAssertEqual(config.gaps.inner.horizontal, 4)
-    XCTAssertEqual(config.gaps.inner.vertical, 6)
     XCTAssertEqual(config.gaps.outer.left, 10)
     XCTAssertEqual(config.gaps.outer.top, 11)
     XCTAssertEqual(config.gaps.outer.right, 12)
@@ -225,21 +207,14 @@ final class GizmoConfigParserTests: XCTestCase {
     XCTAssertEqual(config?.gaps, .default)
   }
 
-  func testParseWorkspaceDisplaySetsAndMode() throws {
+  func testParseWorkspaceNames() throws {
     let result = parser.parse(
       """
       config-version = 1
 
       [workspace]
       enabled = true
-      mode = "per_display"
-      hide_strategy = "corner_offscreen"
-
-      [workspace.display_sets.primary]
       names = ["q", "w", "e"]
-
-      [workspace.display_sets.secondary]
-      names = ["3", "4"]
       """
     )
 
@@ -247,9 +222,7 @@ final class GizmoConfigParserTests: XCTestCase {
     XCTAssertTrue(result.errors.isEmpty)
 
     let config = try XCTUnwrap(result.config)
-    XCTAssertEqual(config.workspace.mode, .perDisplay)
     XCTAssertEqual(config.workspace.primaryNames, ["q", "w", "e"])
-    XCTAssertEqual(config.workspace.secondaryNames, ["3", "4"])
   }
 
   func testLegacyWorkspaceNamesPopulatePrimaryDisplaySet() throws {
@@ -266,17 +239,13 @@ final class GizmoConfigParserTests: XCTestCase {
     XCTAssertTrue(result.errors.isEmpty)
 
     let config = try XCTUnwrap(result.config)
-    XCTAssertEqual(config.workspace.mode, .primaryOnly)
     XCTAssertEqual(config.workspace.primaryNames, ["1", "2"])
   }
 
-  func testDuplicateWorkspaceNamesAcrossDisplaysReturnError() {
+  func testLegacyWorkspaceDisplaySetsReturnError() {
     let result = parser.parse(
       """
       config-version = 1
-
-      [workspace]
-      mode = "per_display"
 
       [workspace.display_sets.primary]
       names = ["q", "w"]
@@ -287,7 +256,7 @@ final class GizmoConfigParserTests: XCTestCase {
     )
 
     XCTAssertNil(result.config)
-    XCTAssertTrue(result.errors.contains { $0.contains("globally unique") })
+    XCTAssertTrue(result.errors.contains { $0.contains("workspace.display_sets") })
   }
 
 }

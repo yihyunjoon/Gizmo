@@ -76,7 +76,6 @@ struct ConfigPathResolver {
     [custom_menubar]
     enabled = false
     border = true
-    display_scope = "all"
     position = "bottom"
     height = 30
     widgets = []
@@ -90,18 +89,10 @@ struct ConfigPathResolver {
 
     [workspace]
     enabled = true
-    mode = "primary_only"
-    hide_strategy = "corner_offscreen"
-
-    [workspace.display_sets.primary]
     names = ["q", "w", "e", "r", "t"]
-
-    [workspace.display_sets.secondary]
-    names = ["3", "4"]
 
     [gaps]
     inner.horizontal = 4
-    inner.vertical = 4
     outer.left = 4
     outer.top = 4
     outer.right = 4

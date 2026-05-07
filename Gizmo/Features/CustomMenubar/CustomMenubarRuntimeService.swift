@@ -16,7 +16,6 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
   private var onWorkspaceSelection: ((String) -> Void)?
   private var workspaceState = VirtualWorkspaceState(
     enabled: WorkspaceConfig.default.enabled,
-    mode: .primaryOnly,
     workspaceNames: WorkspaceConfig.default.primaryNames,
     activeWorkspaceName: WorkspaceConfig.default.primaryNames.first ?? WorkspaceConfig.defaultNames[0],
     previousWorkspaceName: nil,
@@ -320,12 +319,7 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
   }
 
   private func targetDisplayRoles() -> [WorkspaceDisplayRole] {
-    switch workspaceState.mode {
-    case .primaryOnly, .unified:
-      return workspaceState.displayStates[.primary] == nil ? [] : [.primary]
-    case .perDisplay:
-      return WorkspaceDisplayRole.allCases.filter { workspaceState.displayStates[$0] != nil }
-    }
+    workspaceState.displayStates[.primary] == nil ? [] : [.primary]
   }
 
   private func resolvedDisplayTargets() -> [(role: WorkspaceDisplayRole, screen: NSScreen)] {
@@ -343,14 +337,8 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
   }
 
   private func screen(for role: WorkspaceDisplayRole) -> NSScreen? {
-    switch role {
-    case .primary:
-      return NSScreen.screens.first
-    case .secondary:
-      let screens = NSScreen.screens
-      guard screens.count >= 2 else { return nil }
-      return screens[1]
-    }
+    guard role == .primary else { return nil }
+    return NSScreen.screens.first
   }
 
   private func workspaceTapHandler() -> (String) -> Void {

@@ -86,7 +86,7 @@ struct GizmoConfigParser {
 
     appendUnknownKeys(
       in: workspaceTable,
-      allowed: ["enabled", "mode", "names", "display_sets", "hide_strategy"],
+      allowed: ["enabled", "names"],
       prefix: "workspace",
       errors: &errors
     )
@@ -99,22 +99,6 @@ struct GizmoConfigParser {
       config.workspace.enabled = enabled
     }
 
-    if let modeRaw = workspaceTable["mode"] {
-      guard let modeValue = modeRaw.string else {
-        errors.append("workspace.mode: Expected string, got \(modeRaw.type)")
-        return
-      }
-
-      guard let mode = WorkspaceMode(rawValue: modeValue) else {
-        errors.append(
-          "workspace.mode: Invalid value '\(modeValue)'. Allowed: primary_only, per_display, unified."
-        )
-        return
-      }
-
-      config.workspace.mode = mode
-    }
-
     if let namesRaw = workspaceTable["names"] {
       if let parsedNames = parseWorkspaceNamesArray(
         namesRaw,
@@ -123,109 +107,6 @@ struct GizmoConfigParser {
       ) {
         config.workspace.primaryNames = parsedNames
       }
-    }
-
-    if let displaySetsRaw = workspaceTable["display_sets"] {
-      parseWorkspaceDisplaySets(
-        displaySetsRaw,
-        workspaceConfig: &config.workspace,
-        errors: &errors
-      )
-    }
-
-    if let hideStrategyRaw = workspaceTable["hide_strategy"] {
-      guard let hideStrategyValue = hideStrategyRaw.string else {
-        errors.append("workspace.hide_strategy: Expected string, got \(hideStrategyRaw.type)")
-        return
-      }
-
-      guard let hideStrategy = WorkspaceHideStrategy(rawValue: hideStrategyValue) else {
-        errors.append(
-          "workspace.hide_strategy: Invalid value '\(hideStrategyValue)'. Allowed: corner_offscreen."
-        )
-        return
-      }
-
-      config.workspace.hideStrategy = hideStrategy
-    }
-
-    validateWorkspaceNames(config: config.workspace, errors: &errors)
-  }
-
-  private func parseWorkspaceDisplaySets(
-    _ raw: TOMLValueConvertible,
-    workspaceConfig: inout WorkspaceConfig,
-    errors: inout [String]
-  ) {
-    guard let displaySetsTable = raw.table else {
-      errors.append("workspace.display_sets: Expected table, got \(raw.type)")
-      return
-    }
-
-    appendUnknownKeys(
-      in: displaySetsTable,
-      allowed: ["primary", "secondary"],
-      prefix: "workspace.display_sets",
-      errors: &errors
-    )
-
-    if let primaryRaw = displaySetsTable["primary"] {
-      parseWorkspaceDisplaySet(
-        primaryRaw,
-        role: .primary,
-        workspaceConfig: &workspaceConfig,
-        errors: &errors
-      )
-    }
-
-    if let secondaryRaw = displaySetsTable["secondary"] {
-      parseWorkspaceDisplaySet(
-        secondaryRaw,
-        role: .secondary,
-        workspaceConfig: &workspaceConfig,
-        errors: &errors
-      )
-    }
-  }
-
-  private func parseWorkspaceDisplaySet(
-    _ raw: TOMLValueConvertible,
-    role: WorkspaceDisplayRole,
-    workspaceConfig: inout WorkspaceConfig,
-    errors: inout [String]
-  ) {
-    let rolePath = "workspace.display_sets.\(role.rawValue)"
-
-    guard let roleTable = raw.table else {
-      errors.append("\(rolePath): Expected table, got \(raw.type)")
-      return
-    }
-
-    appendUnknownKeys(
-      in: roleTable,
-      allowed: ["names"],
-      prefix: rolePath,
-      errors: &errors
-    )
-
-    guard let namesRaw = roleTable["names"] else {
-      errors.append("\(rolePath).names: Missing required key.")
-      return
-    }
-
-    guard let parsedNames = parseWorkspaceNamesArray(
-      namesRaw,
-      path: "\(rolePath).names",
-      errors: &errors
-    ) else {
-      return
-    }
-
-    switch role {
-    case .primary:
-      workspaceConfig.primaryNames = parsedNames
-    case .secondary:
-      workspaceConfig.secondaryNames = parsedNames
     }
   }
 
@@ -268,25 +149,6 @@ struct GizmoConfigParser {
     }
 
     return parsedNames
-  }
-
-  private func validateWorkspaceNames(
-    config: WorkspaceConfig,
-    errors: inout [String]
-  ) {
-    var seen: [String: WorkspaceDisplayRole] = [:]
-
-    for role in WorkspaceDisplayRole.allCases {
-      for name in config.names(for: role) {
-        if let previousRole = seen[name] {
-          errors.append(
-            "workspace.display_sets.\(role.rawValue).names: Workspace name '\(name)' duplicates \(previousRole.rawValue). Workspace names must be globally unique."
-          )
-        } else {
-          seen[name] = role
-        }
-      }
-    }
   }
 
   private func parseLauncher(
@@ -419,7 +281,6 @@ struct GizmoConfigParser {
       allowed: [
         "enabled",
         "border",
-        "display_scope",
         "position",
         "height",
         "widgets",
@@ -446,22 +307,6 @@ struct GizmoConfigParser {
       }
 
       config.customMenubar.border = border
-    }
-
-    if let displayScopeRaw = menubarTable["display_scope"] {
-      guard let displayScopeValue = displayScopeRaw.string else {
-        errors.append("custom_menubar.display_scope: Expected string, got \(displayScopeRaw.type)")
-        return
-      }
-
-      guard let scope = CustomMenubarDisplayScope(rawValue: displayScopeValue) else {
-        errors.append(
-          "custom_menubar.display_scope: Invalid value '\(displayScopeValue)'. Allowed: all, active, primary."
-        )
-        return
-      }
-
-      config.customMenubar.displayScope = scope
     }
 
     if let positionRaw = menubarTable["position"] {
@@ -727,7 +572,7 @@ struct GizmoConfigParser {
 
     appendUnknownKeys(
       in: innerTable,
-      allowed: ["horizontal", "vertical"],
+      allowed: ["horizontal"],
       prefix: "gaps.inner",
       errors: &errors
     )
@@ -742,18 +587,6 @@ struct GizmoConfigParser {
       }
 
       innerGaps.horizontal = horizontal
-    }
-
-    if let verticalRaw = innerTable["vertical"] {
-      guard let vertical = nonNegativeNumberValue(
-        from: verticalRaw,
-        path: "gaps.inner.vertical",
-        errors: &errors
-      ) else {
-        return
-      }
-
-      innerGaps.vertical = vertical
     }
   }
 

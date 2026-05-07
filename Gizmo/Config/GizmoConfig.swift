@@ -23,56 +23,22 @@ struct GizmoConfig: Equatable {
 
 struct WorkspaceConfig: Equatable {
   var enabled: Bool
-  var mode: WorkspaceMode
   var primaryNames: [String]
-  var secondaryNames: [String]
-  var hideStrategy: WorkspaceHideStrategy
 
   static let defaultNames: [String] = ["q", "w", "e", "r", "t"]
-  static let defaultSecondaryNames: [String] = ["3", "4"]
 
   static let `default` = WorkspaceConfig(
     enabled: true,
-    mode: .primaryOnly,
-    primaryNames: defaultNames,
-    secondaryNames: defaultSecondaryNames,
-    hideStrategy: .cornerOffscreen
+    primaryNames: defaultNames
   )
 
   var commandWorkspaceNames: [String] {
-    var ordered: [String] = []
-    var seen: Set<String> = []
-
-    for name in primaryNames + secondaryNames where seen.insert(name).inserted {
-      ordered.append(name)
-    }
-
-    return ordered
+    primaryNames
   }
-
-  func names(for role: WorkspaceDisplayRole) -> [String] {
-    switch role {
-    case .primary:
-      return primaryNames
-    case .secondary:
-      return secondaryNames
-    }
-  }
-}
-
-enum WorkspaceMode: String, CaseIterable, Equatable {
-  case primaryOnly = "primary_only"
-  case perDisplay = "per_display"
-  case unified
 }
 
 enum WorkspaceDisplayRole: String, CaseIterable, Equatable, Hashable, Codable {
   case primary
-  case secondary
-}
-
-enum WorkspaceHideStrategy: String, CaseIterable, Equatable {
-  case cornerOffscreen = "corner_offscreen"
 }
 
 struct LauncherConfig: Equatable {
@@ -168,11 +134,9 @@ struct WindowManagerGapsConfig: Equatable {
 
 struct WindowManagerInnerGaps: Equatable {
   var horizontal: Double
-  var vertical: Double
 
   static let `default` = WindowManagerInnerGaps(
-    horizontal: 4,
-    vertical: 4
+    horizontal: 4
   )
 }
 
@@ -193,7 +157,6 @@ struct WindowManagerOuterGaps: Equatable {
 struct CustomMenubarConfig: Equatable {
   var enabled: Bool
   var border: Bool
-  var displayScope: CustomMenubarDisplayScope
   var position: CustomMenubarPosition
   var height: Double
   var widgets: [String]
@@ -204,7 +167,6 @@ struct CustomMenubarConfig: Equatable {
   static let `default` = CustomMenubarConfig(
     enabled: false,
     border: true,
-    displayScope: .primary,
     position: .bottom,
     height: 30,
     widgets: [],
@@ -220,12 +182,6 @@ struct CustomWidgetConfig: Equatable {
   var shellCommand: String
   var refreshInterval: Double
   var widgetAlignment: CustomWidgetAlignment
-}
-
-enum CustomMenubarDisplayScope: String, CaseIterable, Equatable {
-  case all
-  case active
-  case primary
 }
 
 enum CustomMenubarPosition: String, CaseIterable, Equatable {

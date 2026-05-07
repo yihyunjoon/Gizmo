@@ -29,7 +29,6 @@ struct AppBootstrap {
     let windowManagerService = WindowManagerService(
       permissionService: accessibilityPermissionService,
       customMenubarConfigProvider: { configStore.active.customMenubar },
-      workspaceConfigProvider: { configStore.active.workspace },
       gapsConfigProvider: { configStore.active.gaps },
       fallbackWindowElementProvider: {
         workspaceFocusObserverService.preferredWindowElement()

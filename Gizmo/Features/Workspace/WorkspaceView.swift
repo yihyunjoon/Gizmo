@@ -12,7 +12,6 @@ struct WorkspaceView: View {
     let layer: Int
   }
 
-  @Environment(ConfigStore.self) private var configStore
   @Environment(AccessibilityPermissionService.self)
   private var accessibilityPermissionService
   @Environment(VirtualWorkspaceService.self)
@@ -42,10 +41,6 @@ struct WorkspaceView: View {
         LabeledContent(
           String(localized: "Previous Workspace"),
           value: snapshot.state.previousWorkspaceName ?? "-"
-        )
-        LabeledContent(
-          String(localized: "Hide Strategy"),
-          value: configStore.active.workspace.hideStrategy.rawValue
         )
         LabeledContent(
           String(localized: "Managed Window Count"),

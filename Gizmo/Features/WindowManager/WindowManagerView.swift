@@ -36,10 +36,6 @@ struct WindowManagerView: View {
           value: String(format: "%.0f", configStore.active.gaps.inner.horizontal)
         )
         LabeledContent(
-          String(localized: "Inner Vertical"),
-          value: String(format: "%.0f", configStore.active.gaps.inner.vertical)
-        )
-        LabeledContent(
           String(localized: "Outer Left"),
           value: String(format: "%.0f", configStore.active.gaps.outer.left)
         )
