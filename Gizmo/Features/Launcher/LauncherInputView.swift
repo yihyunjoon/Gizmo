@@ -13,17 +13,6 @@ final class LauncherInputModel {
 }
 
 struct LauncherInputView: View {
-  private enum Layout {
-    static let maxVisibleRows = 5
-    static let maxVisibleRowsWhenError = 3
-    static let rowHeight: CGFloat = 33
-    static let rowSpacing: CGFloat = 6
-    static let listVerticalPadding: CGFloat = 2
-    static let leadingSlotSize: CGFloat = 18
-    static let iconCornerRadius: CGFloat = 4
-    static let rowContentSpacing: CGFloat = 8
-  }
-
   // MARK: - Properties
 
   let model: LauncherInputModel
@@ -33,6 +22,7 @@ struct LauncherInputView: View {
   let onOpenMainWindow: () -> Void
   let matcher: LauncherFuzzyMatcher = LauncherFuzzyMatcher()
   let usageStore: LauncherUsageStore = LauncherUsageStore()
+  private let theme = GizmoTheme.current
 
   @State private var query: String = ""
   @State private var selectedCommandIndex: Int = 0
@@ -55,8 +45,8 @@ struct LauncherInputView: View {
   private var visibleRows: Int {
     let maxRows =
       executionError == nil
-      ? Layout.maxVisibleRows
-      : Layout.maxVisibleRowsWhenError
+      ? theme.launcher.maxVisibleRows
+      : theme.launcher.maxVisibleRowsWhenError
     return min(displayedCommands.count, maxRows)
   }
 
@@ -64,27 +54,27 @@ struct LauncherInputView: View {
     guard visibleRows > 0 else { return 0 }
 
     let rowCount = CGFloat(visibleRows)
-    let rowHeights = rowCount * Layout.rowHeight
-    let rowSpacings = CGFloat(max(0, visibleRows - 1)) * Layout.rowSpacing
-    let verticalPadding = Layout.listVerticalPadding * 2
+    let rowHeights = rowCount * theme.launcher.rowHeight
+    let rowSpacings = CGFloat(max(0, visibleRows - 1)) * theme.launcher.rowSpacing
+    let verticalPadding = theme.launcher.listVerticalPadding * 2
     return rowHeights + rowSpacings + verticalPadding
   }
 
   // MARK: - Body
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      HStack(spacing: 10) {
+    VStack(alignment: .leading, spacing: theme.launcher.contentSpacing) {
+      HStack(spacing: theme.launcher.searchFieldSpacing) {
         Image(systemName: "magnifyingglass")
           .foregroundStyle(.secondary)
-          .font(.system(size: 18, weight: .medium))
+          .font(theme.launcher.searchIconFont)
 
         TextField(
           String(localized: "Search apps and commands"),
           text: $query
         )
         .textFieldStyle(.plain)
-        .font(.system(size: 24, weight: .medium, design: .rounded))
+        .font(theme.launcher.searchInputFont)
         .focused($isInputFocused)
         .onSubmit {
           executeSelectedCommand()
@@ -95,11 +85,11 @@ struct LauncherInputView: View {
 
       if displayedCommands.isEmpty {
         Text(String(localized: "No matching results."))
-          .font(.system(size: 13, weight: .regular, design: .rounded))
+          .font(theme.launcher.emptyResultFont)
           .foregroundStyle(.secondary)
       } else {
         ScrollView {
-          LazyVStack(alignment: .leading, spacing: Layout.rowSpacing) {
+          LazyVStack(alignment: .leading, spacing: theme.launcher.rowSpacing) {
             ForEach(Array(displayedCommands.enumerated()), id: \.element.id) {
               index, command in
               commandRow(command: command, isSelected: index == selectedCommandIndex)
@@ -109,13 +99,13 @@ struct LauncherInputView: View {
               }
             }
           }
-          .padding(.vertical, Layout.listVerticalPadding)
+          .padding(.vertical, theme.launcher.listVerticalPadding)
         }
         .frame(height: commandListHeight, alignment: .top)
       }
 
       if let executionError {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: theme.launcher.errorContentSpacing) {
           Text(executionError.localizedDescription)
             .font(.footnote)
             .foregroundStyle(.red)
@@ -129,15 +119,15 @@ struct LauncherInputView: View {
         }
       }
     }
-    .padding(16)
-    .frame(width: 640)
+    .padding(theme.launcher.panelPadding)
+    .frame(width: theme.launcher.panelWidth)
     .background(.regularMaterial)
-    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    .clipShape(RoundedRectangle(cornerRadius: theme.launcher.panelCornerRadius, style: .continuous))
     .overlay {
-      RoundedRectangle(cornerRadius: 16, style: .continuous)
-        .strokeBorder(.white.opacity(0.18), lineWidth: 1)
+      RoundedRectangle(cornerRadius: theme.launcher.panelCornerRadius, style: .continuous)
+        .strokeBorder(theme.launcher.panelBorderColor, lineWidth: theme.launcher.panelBorderWidth)
     }
-    .padding(12)
+    .padding(theme.launcher.panelOuterPadding)
     .onAppear {
       focusInput()
     }
@@ -184,20 +174,20 @@ struct LauncherInputView: View {
 
   @ViewBuilder
   private func commandRow(command: LauncherCommand, isSelected: Bool) -> some View {
-    HStack(spacing: Layout.rowContentSpacing) {
+    HStack(spacing: theme.launcher.rowContentSpacing) {
       leadingAccessory(for: command)
 
       Text(command.title)
-        .font(.system(size: 14, weight: .medium, design: .rounded))
+        .font(theme.launcher.commandTitleFont)
         .foregroundStyle(.primary)
       Spacer(minLength: 0)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(.horizontal, 10)
-    .padding(.vertical, 8)
+    .padding(.horizontal, theme.launcher.rowHorizontalPadding)
+    .padding(.vertical, theme.launcher.rowVerticalPadding)
     .background(
-      RoundedRectangle(cornerRadius: 8, style: .continuous)
-        .fill(isSelected ? .blue.opacity(0.22) : .clear)
+      RoundedRectangle(cornerRadius: theme.launcher.rowCornerRadius, style: .continuous)
+        .fill(theme.launcher.rowBackgroundColor(isSelected: isSelected))
     )
   }
 
@@ -210,7 +200,7 @@ struct LauncherInputView: View {
         Color.clear
       }
     }
-    .frame(width: Layout.leadingSlotSize, height: Layout.leadingSlotSize)
+    .frame(width: theme.launcher.leadingSlotSize, height: theme.launcher.leadingSlotSize)
   }
 
   private func appIcon(for target: LauncherApplicationTarget) -> some View {
@@ -219,8 +209,8 @@ struct LauncherInputView: View {
     return Image(nsImage: NSWorkspace.shared.icon(forFile: iconPath))
       .resizable()
       .interpolation(.high)
-      .frame(width: Layout.leadingSlotSize, height: Layout.leadingSlotSize)
-      .clipShape(RoundedRectangle(cornerRadius: Layout.iconCornerRadius, style: .continuous))
+      .frame(width: theme.launcher.leadingSlotSize, height: theme.launcher.leadingSlotSize)
+      .clipShape(RoundedRectangle(cornerRadius: theme.launcher.iconCornerRadius, style: .continuous))
   }
 
   private func executeSelectedCommand() {

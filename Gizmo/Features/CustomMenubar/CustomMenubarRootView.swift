@@ -3,12 +3,13 @@ import SwiftUI
 struct CustomMenubarRootView: View {
   @Bindable var model: CustomMenubarModel
   let onWorkspaceTap: (String) -> Void
+  private let theme = GizmoTheme.current
 
   var body: some View {
     ZStack {
-      Color.black.opacity(model.config.backgroundOpacity)
+      theme.customMenubar.backgroundColor.opacity(model.config.backgroundOpacity)
 
-      HStack(spacing: 10) {
+      HStack(spacing: theme.customMenubar.contentSpacing) {
         workspaceStrip
         customWidgets(alignedTo: .left)
         Spacer(minLength: 0)
@@ -27,7 +28,7 @@ struct CustomMenubarRootView: View {
     .overlay(alignment: model.config.position.borderAlignment) {
       if model.config.border {
         Divider()
-          .overlay(Color.white.opacity(0.18))
+          .overlay(theme.customMenubar.borderColor)
       }
     }
     .contentShape(Rectangle())
@@ -39,7 +40,7 @@ struct CustomMenubarRootView: View {
 
 private extension CustomMenubarRootView {
   var workspaceStrip: some View {
-    HStack(spacing: 6) {
+    HStack(spacing: theme.customMenubar.workspaceStripSpacing) {
       ForEach(model.workspaceNames, id: \.self) { workspaceName in
         Button {
           onWorkspaceTap(workspaceName)
@@ -55,33 +56,33 @@ private extension CustomMenubarRootView {
     let appNames = model.appNames(for: workspaceName)
     let isFocused = model.isFocusedWorkspace(workspaceName)
 
-    return HStack(spacing: 5) {
+    return HStack(spacing: theme.customMenubar.workspaceButtonContentSpacing) {
       Text(workspaceName.uppercased())
-        .font(.system(size: 12, weight: .semibold, design: .rounded))
-        .foregroundStyle(isFocused ? Color.white.opacity(0.96) : Color.white.opacity(0.74))
+        .font(theme.customMenubar.workspaceNameFont)
+        .foregroundStyle(theme.customMenubar.workspaceNameColor(isFocused: isFocused))
 
       if !appNames.isEmpty {
-        Text("|")
-          .font(.system(size: 12, weight: .semibold, design: .rounded))
-          .foregroundStyle(isFocused ? Color.white.opacity(0.7) : Color.white.opacity(0.48))
+        Text(theme.customMenubar.workspaceDetailsSeparator)
+          .font(theme.customMenubar.workspaceDetailsSeparatorFont)
+          .foregroundStyle(theme.customMenubar.workspaceDetailsSeparatorColor(isFocused: isFocused))
 
-        Text(appNames.joined(separator: " · "))
-          .font(.system(size: 11, weight: .medium, design: .rounded))
-          .foregroundStyle(isFocused ? Color.white.opacity(0.86) : Color.white.opacity(0.62))
+        Text(appNames.joined(separator: theme.customMenubar.workspaceAppNameSeparator))
+          .font(theme.customMenubar.workspaceAppNameFont)
+          .foregroundStyle(theme.customMenubar.workspaceAppNameColor(isFocused: isFocused))
           .lineLimit(1)
           .truncationMode(.tail)
       }
     }
-    .padding(.horizontal, 7)
-    .frame(height: 24)
+    .padding(.horizontal, theme.customMenubar.workspaceButtonHorizontalPadding)
+    .frame(height: theme.customMenubar.workspaceButtonHeight)
     .background(
       Capsule(style: .continuous)
-        .fill(isFocused ? Color.white.opacity(0.24) : Color.white.opacity(0.12))
+        .fill(theme.customMenubar.workspaceButtonBackgroundColor(isFocused: isFocused))
     )
   }
 
   func customWidgets(alignedTo alignment: CustomWidgetAlignment) -> some View {
-    HStack(spacing: 10) {
+    HStack(spacing: theme.customMenubar.contentSpacing) {
       ForEach(model.widgetNames(alignedTo: alignment), id: \.self) { widgetName in
         customWidgetView(named: widgetName)
       }
@@ -90,8 +91,8 @@ private extension CustomMenubarRootView {
 
   func customWidgetView(named widgetName: String) -> some View {
     Text(model.customWidgetText(named: widgetName))
-      .font(.system(size: 11, weight: .semibold, design: .monospaced))
-      .foregroundStyle(.white.opacity(0.96))
+      .font(theme.customMenubar.customWidgetFont)
+      .foregroundStyle(theme.customMenubar.customWidgetTextColor)
       .lineLimit(1)
       .truncationMode(.tail)
   }
