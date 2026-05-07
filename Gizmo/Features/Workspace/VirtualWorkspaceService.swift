@@ -85,6 +85,7 @@ struct WorkspaceDisplayState: Equatable {
   let workspaceNames: [String]
   let activeWorkspaceName: String
   let previousWorkspaceName: String?
+  let appNamesByWorkspace: [String: [String]]
 }
 
 struct VirtualWorkspaceDebugSnapshot: Equatable {
@@ -1134,7 +1135,8 @@ final class VirtualWorkspaceService {
       .primary: WorkspaceDisplayState(
         workspaceNames: workspaceNames,
         activeWorkspaceName: activeWorkspaceName,
-        previousWorkspaceName: previousWorkspaceNamesByDisplay[.primary]
+        previousWorkspaceName: previousWorkspaceNamesByDisplay[.primary],
+        appNamesByWorkspace: appNamesByWorkspace
       )
     ]
   }
@@ -1143,6 +1145,22 @@ final class VirtualWorkspaceService {
     driver.allManageableWindows().filter { window in
       !isSpecialWindow(window) && displayRole(for: window) != nil
     }
+  }
+
+  private var appNamesByWorkspace: [String: [String]] {
+    Dictionary(
+      uniqueKeysWithValues: workspaceNames.map { workspaceName in
+        var seen: Set<String> = []
+        var appNames: [String] = []
+        for window in workspaceWindows[workspaceName, default: []] {
+          let appName = window.appName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+          guard !appName.isEmpty else { continue }
+          guard seen.insert(appName).inserted else { continue }
+          appNames.append(appName)
+        }
+        return (workspaceName, appNames)
+      }
+    )
   }
 
   private var persistedActiveWorkspaceNamesByDisplay: [String: String] {

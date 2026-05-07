@@ -77,7 +77,7 @@ struct ConfigPathResolver {
     enabled = false
     border = true
     position = "bottom"
-    height = 30
+    height = 32
     widgets = []
     background_opacity = 0.75
     horizontal_padding = 8

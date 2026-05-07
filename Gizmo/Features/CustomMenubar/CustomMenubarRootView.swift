@@ -44,27 +44,40 @@ private extension CustomMenubarRootView {
         Button {
           onWorkspaceTap(workspaceName)
         } label: {
-          Text(workspaceName)
-            .font(.system(size: 11, weight: .semibold, design: .rounded))
-            .foregroundStyle(
-              model.isFocusedWorkspace(workspaceName)
-                ? Color.white.opacity(0.96)
-                : Color.white.opacity(0.74)
-            )
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(
-              Capsule(style: .continuous)
-                .fill(
-                  model.isFocusedWorkspace(workspaceName)
-                    ? Color.white.opacity(0.24)
-                    : Color.white.opacity(0.12)
-                )
-            )
+          workspaceButtonLabel(for: workspaceName)
         }
         .buttonStyle(.plain)
       }
     }
+  }
+
+  func workspaceButtonLabel(for workspaceName: String) -> some View {
+    let appNames = model.appNames(for: workspaceName)
+    let isFocused = model.isFocusedWorkspace(workspaceName)
+
+    return HStack(spacing: 5) {
+      Text(workspaceName.uppercased())
+        .font(.system(size: 12, weight: .semibold, design: .rounded))
+        .foregroundStyle(isFocused ? Color.white.opacity(0.96) : Color.white.opacity(0.74))
+
+      if !appNames.isEmpty {
+        Text("|")
+          .font(.system(size: 12, weight: .semibold, design: .rounded))
+          .foregroundStyle(isFocused ? Color.white.opacity(0.7) : Color.white.opacity(0.48))
+
+        Text(appNames.joined(separator: " · "))
+          .font(.system(size: 11, weight: .medium, design: .rounded))
+          .foregroundStyle(isFocused ? Color.white.opacity(0.86) : Color.white.opacity(0.62))
+          .lineLimit(1)
+          .truncationMode(.tail)
+      }
+    }
+    .padding(.horizontal, 7)
+    .frame(height: 24)
+    .background(
+      Capsule(style: .continuous)
+        .fill(isFocused ? Color.white.opacity(0.24) : Color.white.opacity(0.12))
+    )
   }
 
   func customWidgets(alignedTo alignment: CustomWidgetAlignment) -> some View {

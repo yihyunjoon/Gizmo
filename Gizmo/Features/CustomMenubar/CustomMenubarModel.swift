@@ -34,6 +34,7 @@ final class CustomMenubarModel {
   private(set) var customWidgetTexts: [String: String] = [:]
   private(set) var workspaceNames: [String] = defaultWorkspaceNames
   private(set) var focusedWorkspaceName: String = defaultWorkspaceNames.first ?? "1"
+  private(set) var appNamesByWorkspace: [String: [String]] = [:]
   private(set) var config: CustomMenubarConfig = .default
 
   private var customWidgetTimers: [String: Timer] = [:]
@@ -71,6 +72,10 @@ final class CustomMenubarModel {
     customWidgetTexts[widgetName] ?? ""
   }
 
+  func appNames(for workspaceName: String) -> [String] {
+    appNamesByWorkspace[workspaceName, default: []]
+  }
+
   func focusWorkspace(_ workspaceName: String) {
     guard workspaceNames.contains(workspaceName) else { return }
     focusedWorkspaceName = workspaceName
@@ -78,12 +83,16 @@ final class CustomMenubarModel {
 
   func updateWorkspaceState(
     names: [String],
-    focusedWorkspaceName: String
+    focusedWorkspaceName: String,
+    appNamesByWorkspace: [String: [String]] = [:]
   ) {
     workspaceNames = names.isEmpty ? Self.defaultWorkspaceNames : names
     self.focusedWorkspaceName = workspaceNames.contains(focusedWorkspaceName)
       ? focusedWorkspaceName
       : (workspaceNames.first ?? Self.defaultWorkspaceNames[0])
+    self.appNamesByWorkspace = appNamesByWorkspace.filter { entry in
+      workspaceNames.contains(entry.key)
+    }
   }
 
   private func configureCustomWidgetTimers() {

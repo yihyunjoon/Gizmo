@@ -23,7 +23,8 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
       .primary: WorkspaceDisplayState(
         workspaceNames: WorkspaceConfig.default.primaryNames,
         activeWorkspaceName: WorkspaceConfig.default.primaryNames.first ?? WorkspaceConfig.defaultNames[0],
-        previousWorkspaceName: nil
+        previousWorkspaceName: nil,
+        appNamesByWorkspace: [:]
       )
     ]
   )
@@ -300,7 +301,8 @@ final class CustomMenubarRuntimeService: NSObject, CustomMenubarPresenting {
       if let displayState = workspaceState.displayStates[role] {
         model.updateWorkspaceState(
           names: displayState.workspaceNames,
-          focusedWorkspaceName: displayState.activeWorkspaceName
+          focusedWorkspaceName: displayState.activeWorkspaceName,
+          appNamesByWorkspace: displayState.appNamesByWorkspace
         )
       }
 
